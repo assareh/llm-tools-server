@@ -22,6 +22,7 @@ class ServerConfig:
     DEFAULT_PORT: int = 8000
     DEFAULT_TEMPERATURE: float = 0.0
     SYSTEM_PROMPT_PATH: str = "system_prompt.md"
+    THREADED: bool = True  # Enable threaded mode for concurrent requests
 
     # Model name advertised via API
     MODEL_NAME: str = "llm-server/default"
@@ -86,6 +87,7 @@ class ServerConfig:
         config.DEFAULT_PORT = int(get_env("PORT", str(cls.DEFAULT_PORT)))
         config.DEFAULT_TEMPERATURE = float(get_env("TEMPERATURE", str(cls.DEFAULT_TEMPERATURE)))
         config.SYSTEM_PROMPT_PATH = get_env("SYSTEM_PROMPT_PATH", cls.SYSTEM_PROMPT_PATH)
+        config.THREADED = get_env("THREADED", "").lower() not in ("false", "0", "no")
         config.WEBUI_PORT = int(get_env("WEBUI_PORT", str(cls.WEBUI_PORT)))
         config.DEBUG_TOOLS = get_env("DEBUG_TOOLS", "").lower() in ("true", "1", "yes")
         config.DEBUG_TOOLS_LOG_FILE = get_env("DEBUG_TOOLS_LOG_FILE", cls.DEBUG_TOOLS_LOG_FILE)
