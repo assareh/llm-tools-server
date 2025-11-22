@@ -11,7 +11,7 @@ import requests
 from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
-from .backends import call_lmstudio, call_ollama
+from .backends import call_lmstudio, call_ollama, check_lmstudio_health, check_ollama_health
 from .config import ServerConfig
 
 
@@ -156,6 +156,24 @@ class LLMServer:
             return call_ollama(messages, self.tools, self.config, temperature, stream)
         else:  # lmstudio
             return call_lmstudio(messages, self.tools, self.config, temperature, stream)
+
+    def check_backend_health(self) -> bool:
+        """Check if the backend is healthy and reachable.
+
+        Returns:
+            True if backend is healthy, False otherwise
+        """
+        if self.config.BACKEND_TYPE == "ollama":
+            is_healthy, message = check_ollama_health(self.config, timeout=self.config.HEALTH_CHECK_TIMEOUT)
+        else:  # lmstudio
+            is_healthy, message = check_lmstudio_health(self.config, timeout=self.config.HEALTH_CHECK_TIMEOUT)
+
+        if is_healthy:
+            print(f"✓ {message}")
+        else:
+            print(f"✗ {message}")
+
+        return is_healthy
 
     def process_chat_completion(self, messages: List[Dict], temperature: float, max_iterations: int = 5) -> Dict:
         """Process chat completion with tool calling loop (non-streaming)."""
@@ -484,6 +502,14 @@ Port: {port}
 API: http://localhost:{port}/v1
 """
         )
+
+        # Check backend health if enabled
+        if self.config.HEALTH_CHECK_ON_STARTUP:
+            print("Checking backend health...")
+            if not self.check_backend_health():
+                print("\n⚠️  Warning: Backend health check failed!")
+                print("The server will start anyway, but requests may fail.")
+                print("To disable this check, set HEALTH_CHECK_ON_STARTUP=false\n")
 
         # Run initialization hook if provided
         if self.init_hook:

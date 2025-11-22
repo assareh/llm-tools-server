@@ -37,6 +37,10 @@ class ServerConfig:
     BACKEND_CONNECT_TIMEOUT: int = 10  # Connection timeout
     BACKEND_READ_TIMEOUT: int = 300  # Read timeout (5 minutes for long completions)
 
+    # Health check settings
+    HEALTH_CHECK_ON_STARTUP: bool = True  # Check backend availability before starting server
+    HEALTH_CHECK_TIMEOUT: int = 5  # Timeout for health check requests (in seconds)
+
     # Custom prompt suggestions for WebUI (list of dicts with title and content)
     DEFAULT_PROMPT_SUGGESTIONS: Optional[list] = None
 
@@ -79,5 +83,7 @@ class ServerConfig:
         config.DEBUG_TOOLS_LOG_FILE = get_env("DEBUG_TOOLS_LOG_FILE", cls.DEBUG_TOOLS_LOG_FILE)
         config.BACKEND_CONNECT_TIMEOUT = int(get_env("BACKEND_CONNECT_TIMEOUT", str(cls.BACKEND_CONNECT_TIMEOUT)))
         config.BACKEND_READ_TIMEOUT = int(get_env("BACKEND_READ_TIMEOUT", str(cls.BACKEND_READ_TIMEOUT)))
+        config.HEALTH_CHECK_ON_STARTUP = get_env("HEALTH_CHECK_ON_STARTUP", "").lower() not in ("false", "0", "no")
+        config.HEALTH_CHECK_TIMEOUT = int(get_env("HEALTH_CHECK_TIMEOUT", str(cls.HEALTH_CHECK_TIMEOUT)))
 
         return config
