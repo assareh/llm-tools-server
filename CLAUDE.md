@@ -5,15 +5,18 @@ Developer guide for maintaining the LLM API Server framework.
 ## Quick Reference
 
 ```bash
+# Setup (first time)
+uv sync --extra dev             # Install all dependencies + dev tools
+
 # Before every commit
-./lint.sh
+./lint.sh                       # Format and lint
 
 # Manual linting
-black llm_api_server/          # Format code
-ruff check --fix llm_api_server/  # Lint with auto-fix
+uv run black llm_api_server/    # Format code
+uv run ruff check --fix llm_api_server/  # Lint with auto-fix
 
-# Install for development
-pip install -e '.[dev]'         # Editable install with dev tools
+# Running commands
+uv run <command>                # Run any command in the project environment
 ```
 
 ## Project Overview
@@ -91,8 +94,8 @@ Since this is a framework library:
 1. **Local testing**: Install in consuming project
    ```bash
    cd ../milesoss  # or ../Ivan
-   pip install -e ../llm-api-server
-   python milesoss.py --no-webui
+   uv sync  # Will pull llm-api-server from GitHub
+   uv run python milesoss.py --no-webui
    ```
 
 2. **Integration testing**: Verify in both Ivan and milesoss
@@ -106,34 +109,41 @@ Since this is a framework library:
 ## Installation Options
 
 ```bash
-# Editable install (development)
+# Using uv (recommended)
+uv sync              # Install core dependencies
+uv sync --extra dev  # With development tools
+uv sync --extra webui  # With Open Web UI
+uv sync --all-extras  # Everything
+
+# Using pip (legacy)
 pip install -e .
-
-# With development tools
 pip install -e '.[dev]'
-
-# With Open Web UI
 pip install -e '.[webui]'
-
-# From git (in consuming projects)
-pip install -e ../llm-api-server
 ```
 
 ## Git Workflow
 
-Since this is not currently a git repository, changes are distributed via:
-- Direct file editing
-- Reinstallation in consuming projects: `pip install -e ../llm-api-server --force-reinstall`
+Standard GitHub workflow:
 
-If converting to git:
 ```bash
-git init
+# Make changes
+./lint.sh  # Format and lint
+
+# Commit
 git add .
 git commit -m "feat: description
 
-🤖 Generated with Claude Code
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Push to GitHub
+git push
+```
+
+Changes are now distributed via GitHub. Consuming projects install with:
+```
+llm-api-server @ git+https://github.com/assareh/llm-api-server.git
 ```
 
 ## Key Components

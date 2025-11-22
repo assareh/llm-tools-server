@@ -14,6 +14,22 @@ A reusable Flask server providing an OpenAI-compatible API for local LLM backend
 
 ## Installation
 
+### Using uv (recommended)
+
+```bash
+# Clone and install
+git clone https://github.com/assareh/llm-api-server.git
+cd llm-api-server
+uv sync
+
+# With optional dependencies
+uv sync --extra webui  # For Open Web UI support
+uv sync --extra dev    # For development tools
+uv sync --all-extras   # Install everything
+```
+
+### Using pip
+
 ```bash
 pip install llm-api-server
 ```
@@ -21,7 +37,7 @@ pip install llm-api-server
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/llm-api-server.git
+git clone https://github.com/assareh/llm-api-server.git
 cd llm-api-server
 pip install -e .
 ```
@@ -230,9 +246,30 @@ See the `examples/` directory for complete examples:
 
 ## Development
 
+### Using uv (recommended)
+
+```bash
+# Clone and install with dev dependencies
+git clone https://github.com/assareh/llm-api-server.git
+cd llm-api-server
+uv sync --extra dev
+
+# Run tests
+uv run pytest
+
+# Format and lint
+./lint.sh
+
+# Or manually
+uv run black llm_api_server/
+uv run ruff check --fix llm_api_server/
+```
+
+### Using pip
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/llm-api-server.git
+git clone https://github.com/assareh/llm-api-server.git
 cd llm-api-server
 
 # Install in development mode
@@ -245,7 +282,7 @@ pytest
 black llm_api_server/
 
 # Lint
-flake8 llm_api_server/
+ruff check --fix llm_api_server/
 ```
 
 ## License
