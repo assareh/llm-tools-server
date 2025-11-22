@@ -36,7 +36,10 @@ def call_ollama(messages: List[Dict], tools: List, config, temperature: float = 
         "options": {"temperature": temperature},
     }
 
-    response = requests.post(endpoint, json=payload, stream=stream)
+    # Set timeout as tuple (connect_timeout, read_timeout)
+    timeout = (config.BACKEND_CONNECT_TIMEOUT, config.BACKEND_READ_TIMEOUT)
+
+    response = requests.post(endpoint, json=payload, stream=stream, timeout=timeout)
     response.raise_for_status()
     return response
 
@@ -63,6 +66,9 @@ def call_lmstudio(messages: List[Dict], tools: List, config, temperature: float 
         "stream": stream,
     }
 
-    response = requests.post(endpoint, json=payload, stream=stream)
+    # Set timeout as tuple (connect_timeout, read_timeout)
+    timeout = (config.BACKEND_CONNECT_TIMEOUT, config.BACKEND_READ_TIMEOUT)
+
+    response = requests.post(endpoint, json=payload, stream=stream, timeout=timeout)
     response.raise_for_status()
     return response

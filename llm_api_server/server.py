@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 
+import requests
 from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
@@ -166,9 +167,46 @@ class LLMServer:
         while iteration < max_iterations:
             iteration += 1
 
-            # Call the backend
-            response = self.call_backend(full_messages, temperature, stream=False)
-            response_data = response.json()
+            # Call the backend with timeout handling
+            try:
+                response = self.call_backend(full_messages, temperature, stream=False)
+                response_data = response.json()
+            except requests.Timeout:
+                return {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": f"Error: Backend request timed out after {self.config.BACKEND_READ_TIMEOUT}s. The model may be overloaded or unresponsive.",
+                            },
+                            "finish_reason": "error",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                }
+            except requests.ConnectionError:
+                return {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": f"Error: Could not connect to {self.config.BACKEND_TYPE} backend at {self.config.LMSTUDIO_ENDPOINT if self.config.BACKEND_TYPE == 'lmstudio' else self.config.OLLAMA_ENDPOINT}. Please ensure the backend is running.",
+                            },
+                            "finish_reason": "error",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                }
 
             # Handle Ollama response format
             if self.config.BACKEND_TYPE == "ollama":
@@ -243,9 +281,48 @@ class LLMServer:
         while iteration < max_iterations:
             iteration += 1
 
-            # Call backend (non-streaming for tool calls)
-            response = self.call_backend(full_messages, temperature, stream=False)
-            response_data = response.json()
+            # Call backend with timeout handling
+            try:
+                response = self.call_backend(full_messages, temperature, stream=False)
+                response_data = response.json()
+            except requests.Timeout:
+                error_chunk = {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "content": f"Error: Backend request timed out after {self.config.BACKEND_READ_TIMEOUT}s. The model may be overloaded or unresponsive."
+                            },
+                            "finish_reason": "error",
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            except requests.ConnectionError:
+                error_chunk = {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "content": f"Error: Could not connect to {self.config.BACKEND_TYPE} backend. Please ensure it is running."
+                            },
+                            "finish_reason": "error",
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
 
             # Extract message and tool calls based on backend
             if self.config.BACKEND_TYPE == "ollama":
@@ -351,12 +428,24 @@ class LLMServer:
         """Handle chat completion requests."""
         try:
             data = request.get_json()
-            messages = data.get("messages", [])
-            temperature = data.get("temperature", self.config.DEFAULT_TEMPERATURE)
-            stream = data.get("stream", False)
+
+            # Validate JSON payload
+            if data is None:
+                return jsonify({"error": "Invalid JSON in request body"}), 400
+
+            # Extract and validate required fields
+            messages = data.get("messages")
+            if messages is None:
+                return jsonify({"error": "Missing required field: 'messages'"}), 400
+
+            if not isinstance(messages, list):
+                return jsonify({"error": "Field 'messages' must be an array"}), 400
 
             if not messages:
-                return jsonify({"error": "No messages provided"}), 400
+                return jsonify({"error": "Field 'messages' cannot be empty"}), 400
+
+            temperature = data.get("temperature", self.config.DEFAULT_TEMPERATURE)
+            stream = data.get("stream", False)
 
             if stream:
                 return Response(
@@ -372,9 +461,7 @@ class LLMServer:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    def run(
-        self, port: Optional[int] = None, host: str = "0.0.0.0", debug: bool = False, start_webui: bool = True
-    ):
+    def run(self, port: Optional[int] = None, host: str = "0.0.0.0", debug: bool = False, start_webui: bool = True):
         """Run the Flask server.
 
         Args:

@@ -33,6 +33,10 @@ class ServerConfig:
     DEBUG_TOOLS: bool = False
     DEBUG_TOOLS_LOG_FILE: str = "tools_debug.log"
 
+    # Backend timeout settings (in seconds)
+    BACKEND_CONNECT_TIMEOUT: int = 10  # Connection timeout
+    BACKEND_READ_TIMEOUT: int = 300  # Read timeout (5 minutes for long completions)
+
     # Custom prompt suggestions for WebUI (list of dicts with title and content)
     DEFAULT_PROMPT_SUGGESTIONS: Optional[list] = None
 
@@ -73,5 +77,7 @@ class ServerConfig:
         config.WEBUI_PORT = int(get_env("WEBUI_PORT", str(cls.WEBUI_PORT)))
         config.DEBUG_TOOLS = get_env("DEBUG_TOOLS", "").lower() in ("true", "1", "yes")
         config.DEBUG_TOOLS_LOG_FILE = get_env("DEBUG_TOOLS_LOG_FILE", cls.DEBUG_TOOLS_LOG_FILE)
+        config.BACKEND_CONNECT_TIMEOUT = int(get_env("BACKEND_CONNECT_TIMEOUT", str(cls.BACKEND_CONNECT_TIMEOUT)))
+        config.BACKEND_READ_TIMEOUT = int(get_env("BACKEND_READ_TIMEOUT", str(cls.BACKEND_READ_TIMEOUT)))
 
         return config

@@ -70,8 +70,13 @@ def start_webui(
             env["DEFAULT_PROMPT_SUGGESTIONS"] = json.dumps(suggestions)
 
         # Start open-webui
+        # Use DEVNULL to avoid pipe buffer filling issues that can cause the subprocess to hang
+        # Set stdout/stderr to DEVNULL instead of PIPE to prevent blocking when buffers fill
         process = subprocess.Popen(
-            [openwebui_cmd, "serve", "--port", str(webui_port)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+            [openwebui_cmd, "serve", "--port", str(webui_port)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
         )
 
         print(f"Open Web UI started at http://localhost:{webui_port}")
