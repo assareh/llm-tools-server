@@ -33,6 +33,8 @@ class ServerConfig:
     # Debug settings
     DEBUG_TOOLS: bool = False
     DEBUG_TOOLS_LOG_FILE: str = "tools_debug.log"
+    DEBUG_LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 10MB default
+    DEBUG_LOG_BACKUP_COUNT: int = 5  # Keep 5 backup files
 
     # Backend timeout settings (in seconds)
     BACKEND_CONNECT_TIMEOUT: int = 10  # Connection timeout
@@ -87,6 +89,8 @@ class ServerConfig:
         config.WEBUI_PORT = int(get_env("WEBUI_PORT", str(cls.WEBUI_PORT)))
         config.DEBUG_TOOLS = get_env("DEBUG_TOOLS", "").lower() in ("true", "1", "yes")
         config.DEBUG_TOOLS_LOG_FILE = get_env("DEBUG_TOOLS_LOG_FILE", cls.DEBUG_TOOLS_LOG_FILE)
+        config.DEBUG_LOG_MAX_BYTES = int(get_env("DEBUG_LOG_MAX_BYTES", str(cls.DEBUG_LOG_MAX_BYTES)))
+        config.DEBUG_LOG_BACKUP_COUNT = int(get_env("DEBUG_LOG_BACKUP_COUNT", str(cls.DEBUG_LOG_BACKUP_COUNT)))
         config.BACKEND_CONNECT_TIMEOUT = int(get_env("BACKEND_CONNECT_TIMEOUT", str(cls.BACKEND_CONNECT_TIMEOUT)))
         config.BACKEND_READ_TIMEOUT = int(get_env("BACKEND_READ_TIMEOUT", str(cls.BACKEND_READ_TIMEOUT)))
         config.HEALTH_CHECK_ON_STARTUP = get_env("HEALTH_CHECK_ON_STARTUP", "").lower() not in ("false", "0", "no")

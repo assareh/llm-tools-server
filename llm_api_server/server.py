@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 
@@ -63,7 +64,13 @@ class LLMServer:
 
         if config.DEBUG_TOOLS:
             log_file = Path(config.DEBUG_TOOLS_LOG_FILE)
-            file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+            # Use RotatingFileHandler for automatic log rotation
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=config.DEBUG_LOG_MAX_BYTES,
+                backupCount=config.DEBUG_LOG_BACKUP_COUNT,
+                encoding="utf-8",
+            )
             file_handler.setLevel(logging.DEBUG)
 
             formatter = logging.Formatter(
@@ -76,8 +83,10 @@ class LLMServer:
                 logger_obj.setLevel(logging.DEBUG)
                 logger_obj.addHandler(file_handler)
 
+            max_mb = config.DEBUG_LOG_MAX_BYTES / (1024 * 1024)
             print(f"Tool debug logging enabled: {log_file.absolute()}")
             print(f"  Logging: {', '.join(logger_names)}")
+            print(f"  Rotation: {max_mb:.1f}MB max, {config.DEBUG_LOG_BACKUP_COUNT} backups")
         else:
             self.logger.setLevel(logging.WARNING)
 
