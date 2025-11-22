@@ -319,9 +319,14 @@ class DocSearchIndex:
                 # Store parent chunks
                 for parent in parents:
                     chunk_id = parent["chunk_id"]
+                    # Convert metadata dataclass to dict for JSON serialization
+                    metadata = parent.get("metadata")
+                    if hasattr(metadata, "__dict__"):
+                        metadata = vars(metadata)
+
                     self.parent_chunks[chunk_id] = {
                         "content": parent["content"],
-                        "metadata": parent.get("metadata"),
+                        "metadata": metadata,
                         "url": page["url"],
                         "lastmod": page.get("lastmod"),
                     }

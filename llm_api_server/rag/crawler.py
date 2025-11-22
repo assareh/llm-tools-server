@@ -293,6 +293,14 @@ class DocumentCrawler:
                 response = requests.get(current_url, headers={"User-Agent": self.user_agent}, timeout=30)
                 response.raise_for_status()
 
+                # Only parse HTML content, skip XML/RSS/etc
+                content_type = response.headers.get("content-type", "")
+                if "text/html" not in content_type:
+                    logger.debug(
+                        f"[CRAWLER] Skipping non-HTML content during recursive crawl: {current_url} ({content_type})"
+                    )
+                    continue
+
                 soup = BeautifulSoup(response.text, "html.parser")
 
                 # Extract all links
