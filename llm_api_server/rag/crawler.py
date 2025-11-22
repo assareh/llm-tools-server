@@ -207,18 +207,31 @@ class DocumentCrawler:
             sitemap_elements = tree.findall("ns:sitemap", namespace) or tree.findall("sitemap")
             if sitemap_elements:
                 logger.info(f"[CRAWLER] Found sitemap index with {len(sitemap_elements)} sub-sitemaps")
-                # Parse each sub-sitemap
+
+                # Collect sub-sitemaps with their lastmod dates
+                sub_sitemaps = []
                 for sitemap_elem in sitemap_elements:
                     loc = sitemap_elem.find("ns:loc", namespace) or sitemap_elem.find("loc")
+                    lastmod = sitemap_elem.find("ns:lastmod", namespace) or sitemap_elem.find("lastmod")
                     if loc is not None and loc.text:
-                        try:
-                            response = requests.get(loc.text, headers={"User-Agent": self.user_agent}, timeout=30)
-                            response.raise_for_status()
-                            sub_urls = self._parse_sitemap_xml(response.content)
-                            urls.extend(sub_urls)
-                            time.sleep(self.rate_limit_delay)
-                        except Exception as e:
-                            logger.warning(f"[CRAWLER] Failed to parse sub-sitemap {loc.text}: {e}")
+                        sub_sitemaps.append({"url": loc.text, "lastmod": lastmod.text if lastmod is not None else None})
+
+                # Sort sub-sitemaps by lastmod (newest first) to prioritize recent content
+                sub_sitemaps.sort(key=lambda x: x.get("lastmod") or "", reverse=True)
+                logger.info("[CRAWLER] Processing sub-sitemaps (newest first)")
+
+                # Parse each sub-sitemap in order
+                for sitemap_info in sub_sitemaps:
+                    try:
+                        response = requests.get(
+                            sitemap_info["url"], headers={"User-Agent": self.user_agent}, timeout=30
+                        )
+                        response.raise_for_status()
+                        sub_urls = self._parse_sitemap_xml(response.content)
+                        urls.extend(sub_urls)
+                        time.sleep(self.rate_limit_delay)
+                    except Exception as e:
+                        logger.warning(f"[CRAWLER] Failed to parse sub-sitemap {sitemap_info['url']}: {e}")
                 return urls
 
             # Regular sitemap with <url> elements
