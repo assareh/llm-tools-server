@@ -10,6 +10,7 @@ Main class for building and searching document indexes using:
 
 import json
 import logging
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -28,6 +29,10 @@ from .config import RAGConfig
 from .crawler import DocumentCrawler
 
 logger = logging.getLogger(__name__)
+
+# Disable tokenizers parallelism to prevent fork-related warnings when using WebUI
+# This is safe because we use ThreadPoolExecutor for parallel operations instead
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class DocSearchIndex:
