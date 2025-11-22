@@ -8,6 +8,7 @@ Main class for building and searching document indexes using:
 - Cross-encoder re-ranking
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -272,12 +273,11 @@ class DocSearchIndex:
         """
         pages = []
         total = len(url_list)
+        cache_hits = 0
 
         with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
-            # Submit all fetch tasks
-            future_to_url = {
-                executor.submit(self.crawler.fetch_page, url_info["url"]): url_info for url_info in url_list
-            }
+            # Submit all fetch tasks (with cache check)
+            future_to_url = {executor.submit(self._fetch_page_with_cache, url_info): url_info for url_info in url_list}
 
             # Process completed tasks
             for idx, future in enumerate(as_completed(future_to_url), 1):
@@ -285,16 +285,99 @@ class DocSearchIndex:
                 try:
                     result = future.result()
                     if result:
-                        url, html = result
-                        pages.append({"url": url, "html": html, "lastmod": url_info.get("lastmod")})
+                        pages.append(result)
+                        if result.get("from_cache"):
+                            cache_hits += 1
 
                         if idx % 10 == 0:
-                            logger.info(f"[RAG] Fetched {idx}/{total} pages ({100*idx/total:.1f}%)")
+                            logger.info(
+                                f"[RAG] Fetched {idx}/{total} pages ({100*idx/total:.1f}%) - {cache_hits} from cache"
+                            )
 
                 except Exception as e:
                     logger.error(f"[RAG] Failed to fetch {url_info['url']}: {e}")
 
+        if cache_hits > 0:
+            logger.info(f"[RAG] Cache hits: {cache_hits}/{len(pages)} ({100*cache_hits/len(pages):.1f}%)")
+
         return pages
+
+    def _fetch_page_with_cache(self, url_info: dict[str, Any]) -> dict[str, Any] | None:
+        """Fetch a page with caching support.
+
+        Args:
+            url_info: URL info dict with url and optional lastmod
+
+        Returns:
+            Page data dict or None if failed
+        """
+        url = url_info["url"]
+        lastmod = url_info.get("lastmod")
+
+        # Try to load from cache
+        cached = self._load_cached_page(url, lastmod)
+        if cached:
+            return cached
+
+        # Fetch fresh content
+        result = self.crawler.fetch_page(url)
+        if result:
+            url, html = result
+            page_data = {"url": url, "html": html, "lastmod": lastmod, "from_cache": False}
+
+            # Save to cache
+            self._save_cached_page(page_data)
+
+            return page_data
+
+        return None
+
+    def _get_page_cache_path(self, url: str) -> Path:
+        """Get cache file path for a URL."""
+        url_hash = hashlib.md5(url.encode()).hexdigest()
+        return self.content_dir / f"{url_hash}.json"
+
+    def _load_cached_page(self, url: str, lastmod: str | None) -> dict[str, Any] | None:
+        """Load cached page content if still valid.
+
+        Args:
+            url: Page URL
+            lastmod: Last modification date from sitemap
+
+        Returns:
+            Cached page data or None if cache invalid
+        """
+        cache_path = self._get_page_cache_path(url)
+        if not cache_path.exists():
+            return None
+
+        try:
+            cached = json.loads(cache_path.read_text())
+
+            # Check if lastmod matches (if we have one)
+            if lastmod and cached.get("lastmod") != lastmod:
+                logger.debug(f"[RAG] Cache invalidated for {url} (lastmod changed)")
+                return None
+
+            # Mark as from cache
+            cached["from_cache"] = True
+            logger.debug(f"[RAG] Loaded from cache: {url}")
+            return cached
+
+        except Exception as e:
+            logger.debug(f"[RAG] Failed to load cache for {url}: {e}")
+            return None
+
+    def _save_cached_page(self, page_data: dict[str, Any]):
+        """Save page content to cache."""
+        try:
+            cache_path = self._get_page_cache_path(page_data["url"])
+            # Don't save the from_cache flag
+            save_data = {k: v for k, v in page_data.items() if k != "from_cache"}
+            cache_path.write_text(json.dumps(save_data))
+            logger.debug(f"[RAG] Cached: {page_data['url']}")
+        except Exception as e:
+            logger.warning(f"[RAG] Failed to cache page {page_data['url']}: {e}")
 
     def _create_chunks(self, pages: list[dict[str, Any]]):
         """Create parent-child chunks from pages using semantic HTML chunking.
