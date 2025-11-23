@@ -101,29 +101,12 @@ def semantic_chunk_html(
     """
     soup = BeautifulSoup(html, "html.parser")
 
-    # Remove boilerplate elements
-    for selector in BOILERPLATE_SELECTORS:
-        for elem in soup.select(selector):
-            elem.decompose()
+    # HTML is already cleaned by readability, so just use the body directly
+    # (Readability extracts main content and removes nav, headers, footers, ads, etc.)
+    content_container = soup.body or soup
 
-    # Find main content container
-    main = (
-        soup.find("main")
-        or soup.find("article")
-        or soup.find("div", class_="content")
-        or soup.find("div", id="content")
-        or soup.body
-    )
-
-    if not main:
+    if not content_container:
         return {"parents": [], "children": []}
-
-    # Try to find the actual content div inside main (docs often have nested structure)
-    content_container = (
-        main.find("div", class_=lambda x: x and ("mdxContent" in " ".join(x) or "markdown" in " ".join(x).lower()))
-        or main.find("div", class_=lambda x: x and "content" in " ".join(x).lower())
-        or main
-    )
 
     parents = []
     children = []

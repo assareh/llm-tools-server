@@ -23,6 +23,7 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
+from readability import Document as ReadabilityDocument
 from sentence_transformers import CrossEncoder
 
 from .chunker import semantic_chunk_html
@@ -323,7 +324,11 @@ class DocSearchIndex:
         result = self.crawler.fetch_page(url)
         if result:
             url, html = result
-            page_data = {"url": url, "html": html, "lastmod": lastmod, "from_cache": False}
+
+            # Extract main content using readability
+            clean_html = self._extract_main_content(html, url)
+
+            page_data = {"url": url, "html": clean_html, "lastmod": lastmod, "from_cache": False}
 
             # Save to cache
             self._save_cached_page(page_data)
@@ -331,6 +336,25 @@ class DocSearchIndex:
             return page_data
 
         return None
+
+    def _extract_main_content(self, html: str, url: str) -> str:
+        """Extract main content from HTML using readability.
+
+        Args:
+            html: Raw HTML content
+            url: Page URL (used by readability for context)
+
+        Returns:
+            Cleaned HTML with just the main content
+        """
+        try:
+            doc = ReadabilityDocument(html, url=url)
+            clean_html = doc.summary()
+            logger.debug(f"[RAG] Extracted main content from {url}")
+            return clean_html
+        except Exception as e:
+            logger.warning(f"[RAG] Failed to extract main content from {url}: {e}, using original HTML")
+            return html
 
     def _get_page_cache_path(self, url: str) -> Path:
         """Get cache file path for a URL."""
