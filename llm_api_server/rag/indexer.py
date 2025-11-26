@@ -228,9 +228,8 @@ class DocSearchIndex:
 
         logger.debug(f"[RAG] Searching for: {query}")
 
-        # Get initial candidates (more than needed for re-ranking)
-        candidates_k = self.config.rerank_top_k if self.config.rerank_enabled else top_k
-        candidates = self.ensemble_retriever.get_relevant_documents(query, k=candidates_k)
+        # Get initial candidates from hybrid search
+        candidates = self.ensemble_retriever.invoke(query)
 
         logger.debug(f"[RAG] Retrieved {len(candidates)} candidates from hybrid search")
 
