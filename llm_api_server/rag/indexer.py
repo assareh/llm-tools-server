@@ -113,6 +113,19 @@ class DocSearchIndex:
             )
             return True
 
+        # Check if max_pages has increased (expansion scenario)
+        crawl_state = self._load_crawl_state()
+        previous_max_pages = crawl_state.get("max_pages_limit")
+        if (
+            previous_max_pages is not None
+            and self.config.max_pages is not None
+            and self.config.max_pages > previous_max_pages
+        ):
+            logger.info(
+                f"[RAG] max_pages increased from {previous_max_pages} to {self.config.max_pages}, needs update"
+            )
+            return True
+
         # Check time since last update
         last_update = datetime.fromisoformat(metadata["last_update"])
         time_since_update = datetime.now() - last_update
