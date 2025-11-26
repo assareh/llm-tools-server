@@ -132,6 +132,7 @@ class TestLLMServer:
 
         # Modify file
         import time
+
         time.sleep(0.01)  # Ensure mtime changes
         prompt_file.write_text("Updated prompt")
 

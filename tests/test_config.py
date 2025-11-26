@@ -1,6 +1,5 @@
 """Tests for ServerConfig configuration loading."""
 
-import os
 
 import pytest
 

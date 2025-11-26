@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-11-25
+
+### Added
+- **RAG Module** - Comprehensive document search system
+  - `DocSearchIndex` class for crawling, chunking, embedding, and searching documents
+  - Three crawling modes: Sitemap (auto-discover) → Recursive (fallback) → Manual URLs
+  - Semantic HTML chunking with parent-child relationships
+  - Hybrid search combining BM25 keyword + semantic vector search
+  - Two-stage cross-encoder re-ranking for improved relevance
+  - Incremental updates with timestamp-based staleness detection
+  - Local-first architecture with FAISS vector store
+  - Robots.txt support with sitemap discovery
+  - HTML page caching for faster index rebuilds
+  - Requires optional `rag` extra: `uv sync --extra rag`
+  - Implementation: `llm_api_server/rag/`
+
+- **RAG Features**
+  - Stateful crawling with resume capability and incremental indexing
+  - Sitemap discovery from robots.txt with date-based prioritization
+  - Readability-lxml integration for main content extraction
+  - Configurable HTTP request timeout (default reduced from 30s to 10s)
+  - 3-strike skip list for persistently failing URLs
+  - Automatic max_pages expansion detection
+
+### Changed
+- `get_current_date()` now explicitly uses local timezone instead of potentially defaulting to UTC
+- RAG crawler now uses shorter 10s timeout by default for better responsiveness
+
+### Fixed
+- Graceful handling of robots.txt load failures in crawler
+- ChunkMetadata JSON serialization and XML parsing warnings resolved
+- Disabled tokenizers parallelism to prevent fork warnings
+- Replaced deprecated `get_relevant_documents` with `invoke` in RAG indexer
+- Proper component initialization before rebuilding retrievers in incremental updates
+
+### Reverted
+- Removed Open Web UI query filter experiment (was causing issues)
+
 ## [0.3.0] - 2025-11-22
 
 ### Added

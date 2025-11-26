@@ -18,12 +18,12 @@ if TYPE_CHECKING:
 
 @tool
 def get_current_date() -> str:
-    """Get the current date in YYYY-MM-DD format.
+    """Get the current date in YYYY-MM-DD format using the local timezone.
 
     Returns:
-        Current date as a string (e.g., "2025-11-21")
+        Current date as a string in local timezone (e.g., "2025-11-21")
     """
-    return datetime.now().strftime("%Y-%m-%d")
+    return datetime.now().astimezone().strftime("%Y-%m-%d")
 
 
 @tool

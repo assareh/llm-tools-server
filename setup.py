@@ -8,7 +8,7 @@ long_description = readme_file.read_text() if readme_file.exists() else ""
 
 setup(
     name="llm-api-server",
-    version="0.1.0",
+    version="0.4.0",
     author="LLM API Server Contributors",
     description="Reusable Flask server for LLM backends (Ollama, LM Studio) with tool calling",
     long_description=long_description,

@@ -6,7 +6,6 @@ import pytest
 import requests
 
 from llm_api_server.backends import check_lmstudio_health, check_ollama_health
-from llm_api_server.config import ServerConfig
 
 
 @pytest.mark.unit
@@ -111,11 +110,9 @@ class TestRetryLogic:
         """Test that connection errors trigger retries."""
         from llm_api_server.backends import _retry_on_connection_error
 
-        mock_func = Mock(side_effect=[
-            requests.ConnectionError("Failed"),
-            requests.ConnectionError("Failed"),
-            "Success"
-        ])
+        mock_func = Mock(
+            side_effect=[requests.ConnectionError("Failed"), requests.ConnectionError("Failed"), "Success"]
+        )
 
         with patch("time.sleep"):  # Skip actual sleep delays
             result = _retry_on_connection_error(mock_func, default_config)

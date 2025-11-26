@@ -223,7 +223,7 @@ This makes tuples a good choice for large datasets that don't need to change!
             "Create custom exceptions for your application:\n\n"
             "```python\n"
             "class ValidationError(Exception):\n"
-            '    \'\'\'Raised when data validation fails.\'\'\'\n'
+            "    '''Raised when data validation fails.'''\n"
             "    pass\n\n"
             "def validate_age(age):\n"
             "    if age < 0:\n"
