@@ -519,10 +519,6 @@ ruff check --fix llm_api_server/
 
 MIT License - see LICENSE file for details.
 
-## Contributing
-
-Contributions welcome! Please open an issue or submit a pull request.
-
 ## Projects Using LLM API Server
 
 - **[Ivan](https://github.com/assareh/ivan)** - AI assistant for HashiCorp solutions engineers
@@ -534,3 +530,11 @@ Built with:
 - [Flask](https://flask.palletsprojects.com/)
 - [LangChain](https://www.langchain.com/)
 - [Open Web UI](https://github.com/open-webui/open-webui)
+
+## Support
+
+If you find this project helpful, consider supporting its development:
+
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/assareh)
+
+Your support helps maintain and improve this project!
