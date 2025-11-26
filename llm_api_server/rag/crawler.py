@@ -12,7 +12,7 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import requests
@@ -78,35 +78,57 @@ class DocumentCrawler:
         self.robots_loaded = False  # Track if robots.txt loaded successfully
         self.sitemap_urls_from_robots = []  # Sitemap URLs found in robots.txt
 
-        robots_url = urljoin(self.base_url, "/robots.txt")
-        self.robot_parser.set_url(robots_url)
-        try:
-            # Fetch robots.txt to parse both rules and sitemap URLs
-            response = requests.get(robots_url, headers={"User-Agent": user_agent}, timeout=request_timeout)
-            response.raise_for_status()
+        # Try to load robots.txt, first from base URL, then from root domain
+        robots_urls_to_try = [urljoin(self.base_url, "/robots.txt")]
 
-            # Parse sitemap URLs from robots.txt
-            for line in response.text.splitlines():
-                line = line.strip()
-                if line.lower().startswith("sitemap:"):
-                    sitemap_url = line.split(":", 1)[1].strip()
-                    self.sitemap_urls_from_robots.append(sitemap_url)
+        # If base URL is a subdomain, also try the root domain
+        parsed = urlparse(self.base_url)
+        domain_parts = parsed.netloc.split(".")
+        if len(domain_parts) > 2:  # e.g., developer.hashicorp.com -> hashicorp.com
+            root_domain = ".".join(domain_parts[-2:])
+            root_url = f"{parsed.scheme}://{root_domain}"
+            robots_urls_to_try.append(urljoin(root_url, "/robots.txt"))
 
-            # Also load into robot parser for can_fetch checks
-            # Note: We can't use read() after fetching manually, so we parse the content
+        robots_loaded_from = None
+        for robots_url in robots_urls_to_try:
+            try:
+                # Fetch robots.txt to parse both rules and sitemap URLs
+                response = requests.get(robots_url, headers={"User-Agent": user_agent}, timeout=request_timeout)
+                response.raise_for_status()
 
-            self.robot_parser.parse(response.text.splitlines())
-            self.robots_loaded = True
+                # Parse sitemap URLs from robots.txt
+                for line in response.text.splitlines():
+                    line = line.strip()
+                    if line.lower().startswith("sitemap:"):
+                        sitemap_url = line.split(":", 1)[1].strip()
+                        self.sitemap_urls_from_robots.append(sitemap_url)
 
+                # Also load into robot parser for can_fetch checks
+                # Note: We can't use read() after fetching manually, so we parse the content
+                self.robot_parser.set_url(robots_url)
+                self.robot_parser.parse(response.text.splitlines())
+                self.robots_loaded = True
+                robots_loaded_from = robots_url
+                break  # Successfully loaded, stop trying
+
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    logger.debug(f"[CRAWLER] No robots.txt found at {robots_url} (404)")
+                else:
+                    logger.debug(f"[CRAWLER] Failed to load robots.txt from {robots_url}: {e}")
+            except Exception as e:
+                logger.debug(f"[CRAWLER] Failed to load robots.txt from {robots_url}: {e}")
+
+        # Log final result
+        if self.robots_loaded:
             if self.sitemap_urls_from_robots:
                 logger.info(
-                    f"[CRAWLER] Loaded robots.txt from {robots_url}, found {len(self.sitemap_urls_from_robots)} sitemap(s)"
+                    f"[CRAWLER] Loaded robots.txt from {robots_loaded_from}, found {len(self.sitemap_urls_from_robots)} sitemap(s)"
                 )
             else:
-                logger.info(f"[CRAWLER] Loaded robots.txt from {robots_url} (no sitemaps listed)")
-        except Exception as e:
-            logger.warning(f"[CRAWLER] Failed to load robots.txt from {robots_url}: {e}")
-            logger.info("[CRAWLER] Proceeding without robots.txt restrictions")
+                logger.info(f"[CRAWLER] Loaded robots.txt from {robots_loaded_from} (no sitemaps listed)")
+        else:
+            logger.info("[CRAWLER] No robots.txt found, proceeding without restrictions")
 
     def discover_and_crawl(self) -> list[dict[str, Any]]:
         """Discover URLs using sitemap or recursive crawl, plus manual URLs.
