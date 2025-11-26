@@ -207,9 +207,11 @@ class DocumentCrawler:
                 if urls:
                     logger.info(f"[CRAWLER] ✓ Successfully parsed sitemap from {sitemap_url}")
                     return urls
+                else:
+                    logger.info(f"[CRAWLER] Sitemap fetched but 0 URLs after filtering: {sitemap_url}")
 
             except Exception as e:
-                logger.debug(f"[CRAWLER] Failed to fetch {sitemap_url}: {e}")
+                logger.info(f"[CRAWLER] Failed to fetch {sitemap_url}: {e}")
                 continue
 
         logger.info("[CRAWLER] No sitemap found at common locations")
@@ -233,15 +235,22 @@ class DocumentCrawler:
             urls = []
 
             # Check if this is a sitemap index (contains <sitemap> elements)
-            sitemap_elements = tree.findall("ns:sitemap", namespace) or tree.findall("sitemap")
+            # Note: Use explicit 'is not None' checks because empty XML elements are falsy
+            sitemap_elements = tree.findall("ns:sitemap", namespace)
+            if not sitemap_elements:
+                sitemap_elements = tree.findall("sitemap")
             if sitemap_elements:
                 logger.info(f"[CRAWLER] Found sitemap index with {len(sitemap_elements)} sub-sitemaps")
 
                 # Collect sub-sitemaps with their lastmod dates
                 sub_sitemaps = []
                 for sitemap_elem in sitemap_elements:
-                    loc = sitemap_elem.find("ns:loc", namespace) or sitemap_elem.find("loc")
-                    lastmod = sitemap_elem.find("ns:lastmod", namespace) or sitemap_elem.find("lastmod")
+                    loc = sitemap_elem.find("ns:loc", namespace)
+                    if loc is None:
+                        loc = sitemap_elem.find("loc")
+                    lastmod = sitemap_elem.find("ns:lastmod", namespace)
+                    if lastmod is None:
+                        lastmod = sitemap_elem.find("lastmod")
                     if loc is not None and loc.text:
                         sub_sitemaps.append({"url": loc.text, "lastmod": lastmod.text if lastmod is not None else None})
 
@@ -270,9 +279,16 @@ class DocumentCrawler:
                 return urls
 
             # Regular sitemap with <url> elements
-            for url_elem in tree.findall("ns:url", namespace) or tree.findall("url"):
-                loc = url_elem.find("ns:loc", namespace) or url_elem.find("loc")
-                lastmod = url_elem.find("ns:lastmod", namespace) or url_elem.find("lastmod")
+            url_elements = tree.findall("ns:url", namespace)
+            if not url_elements:
+                url_elements = tree.findall("url")
+            for url_elem in url_elements:
+                loc = url_elem.find("ns:loc", namespace)
+                if loc is None:
+                    loc = url_elem.find("loc")
+                lastmod = url_elem.find("ns:lastmod", namespace)
+                if lastmod is None:
+                    lastmod = url_elem.find("lastmod")
 
                 if loc is not None and loc.text:
                     url = self._normalize_url(loc.text)

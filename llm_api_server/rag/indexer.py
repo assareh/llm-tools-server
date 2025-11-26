@@ -32,6 +32,9 @@ from .crawler import DocumentCrawler
 
 logger = logging.getLogger(__name__)
 
+# Suppress noisy "ruthless removal did not work" messages from readability library
+logging.getLogger("readability.readability").setLevel(logging.WARNING)
+
 # Disable tokenizers parallelism to prevent fork-related warnings when using WebUI
 # This is safe because we use ThreadPoolExecutor for parallel operations instead
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -196,19 +199,22 @@ class DocSearchIndex:
 
             # Update state
             discovered_urls = [url_info["url"] for url_info in url_list]
-            crawl_complete = True
 
-            # Save discovery state
-            crawl_state.update(
-                {
-                    "discovered_urls": discovered_urls,
-                    "crawl_complete": crawl_complete,
-                    "max_pages_limit": self.config.max_pages,
-                }
-            )
-            self._save_crawl_state(crawl_state)
-
-            logger.info(f"[RAG] Discovered {len(discovered_urls)} URLs in {time.time() - start_time:.1f}s")
+            # Only mark crawl complete if we actually found URLs
+            # This prevents caching an empty result from a failed crawl
+            if discovered_urls:
+                crawl_complete = True
+                crawl_state.update(
+                    {
+                        "discovered_urls": discovered_urls,
+                        "crawl_complete": crawl_complete,
+                        "max_pages_limit": self.config.max_pages,
+                    }
+                )
+                self._save_crawl_state(crawl_state)
+                logger.info(f"[RAG] Discovered {len(discovered_urls)} URLs in {time.time() - start_time:.1f}s")
+            else:
+                logger.warning("[RAG] Crawl found 0 URLs, not caching result")
         else:
             logger.info(f"[RAG] Phase 1/4: Using cached URL list ({len(discovered_urls)} URLs)")
             url_list = [{"url": url} for url in discovered_urls]
