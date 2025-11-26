@@ -217,6 +217,62 @@ web_search = create_web_search_tool(config)
 tools = BUILTIN_TOOLS + [web_search]
 ```
 
+### Open Web UI Integration
+
+The framework includes utilities to detect and filter Open Web UI system-generated tasks:
+
+**Query Filtering:**
+- `is_webui_system_task(query)` - Simple function to detect system tasks
+- `WebUIQueryFilter` - Configurable filter class for advanced usage
+
+**Problem:**
+Open Web UI generates system tasks (title generation, tag generation, follow-up suggestions) that don't benefit from expensive operations like RAG retrieval. These tasks should be filtered out to improve performance and reduce costs.
+
+**Solution:**
+Use the filter in consuming projects to skip RAG for system tasks:
+
+```python
+from llm_api_server import is_webui_system_task
+
+# In your tool that does RAG retrieval
+def search_docs(query: str) -> str:
+    # Skip RAG for Open Web UI system tasks
+    if is_webui_system_task(query):
+        return ""
+
+    # Do expensive RAG retrieval for real queries
+    return rag_index.search(query, top_k=5)
+```
+
+**Advanced usage with custom patterns:**
+```python
+from llm_api_server.webui_utils import WebUIQueryFilter
+
+# Create filter with custom patterns
+filter = WebUIQueryFilter(
+    patterns=[r"^CUSTOM: Generate"],  # Add custom patterns
+    use_defaults=True,  # Include default Open Web UI patterns
+    case_sensitive=False,
+)
+
+# Add patterns dynamically
+filter.add_pattern(r"^### System:")
+
+# Check queries
+if filter.is_system_task(user_query):
+    # Skip expensive operations
+    pass
+```
+
+**Default patterns detected:**
+- Follow-up question generation: `### Task:\nSuggest 3-5 relevant follow-up questions`
+- Title generation: `### Task:\nGenerate a concise, 3-5 word title`
+- Tag generation: `### Task:\nGenerate 1-3 broad tags categorizing`
+
+**Implementation:**
+- `llm_api_server/webui_utils.py` - Filter implementation
+- `tests/test_webui_utils.py` - Comprehensive test coverage
+
 ### Evaluation Framework
 
 The framework includes a comprehensive evaluation system in `llm_api_server/eval/`:

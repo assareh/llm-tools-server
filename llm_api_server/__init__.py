@@ -8,6 +8,7 @@ from .builtin_tools import (
 )
 from .config import ServerConfig
 from .server import LLMServer
+from .webui_utils import WebUIQueryFilter, is_webui_system_task
 
 # Optional modules available but not imported by default to avoid dependency bloat:
 # - Eval module: from llm_api_server.eval import Evaluator, TestCase, etc.
@@ -18,7 +19,9 @@ __all__ = [
     "BUILTIN_TOOLS",
     "LLMServer",
     "ServerConfig",
+    "WebUIQueryFilter",
     "calculate",
     "create_web_search_tool",
     "get_current_date",
+    "is_webui_system_task",
 ]
