@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-11-26
+
+### Changed
+- Renamed `get_current_date()` to `get_current_datetime()` - now returns full date, time, and timezone in human-readable format (e.g., "Wednesday, November 26, 2025 at 2:30 PM PST")
+
+### Fixed
+- Fix XML element fallback logic in sitemap parser (empty XML elements are falsy, causing `or` fallback to fail)
+- Don't cache empty crawl results to prevent persisting failed crawls
+- Suppress noisy "ruthless removal did not work" messages from readability library
+
 ## [0.4.0] - 2025-11-25
 
 ### Added
@@ -30,7 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic max_pages expansion detection
 
 ### Changed
-- Renamed `get_current_date()` to `get_current_datetime()` - now returns full date, time, and timezone in human-readable format (e.g., "Wednesday, November 26, 2025 at 2:30 PM PST")
 - RAG crawler now uses shorter 10s timeout by default for better responsiveness
 
 ### Fixed
