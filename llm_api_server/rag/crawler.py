@@ -170,9 +170,11 @@ class DocumentCrawler:
             ]
         )
 
-        for sitemap_url in sitemap_urls:
+        logger.info(f"[CRAWLER] Searching for sitemap ({len(sitemap_urls)} locations to try)...")
+
+        for idx, sitemap_url in enumerate(sitemap_urls, 1):
             try:
-                logger.info(f"[CRAWLER] Trying sitemap: {sitemap_url}")
+                logger.info(f"[CRAWLER] [{idx}/{len(sitemap_urls)}] Trying sitemap: {sitemap_url}")
                 response = requests.get(
                     sitemap_url, headers={"User-Agent": self.user_agent}, timeout=self.request_timeout
                 )
@@ -181,7 +183,7 @@ class DocumentCrawler:
                 # Parse the sitemap
                 urls = self._parse_sitemap_xml(response.content)
                 if urls:
-                    logger.info(f"[CRAWLER] Successfully parsed sitemap from {sitemap_url}")
+                    logger.info(f"[CRAWLER] ✓ Successfully parsed sitemap from {sitemap_url}")
                     return urls
 
             except Exception as e:
@@ -223,20 +225,26 @@ class DocumentCrawler:
 
                 # Sort sub-sitemaps by lastmod (newest first) to prioritize recent content
                 sub_sitemaps.sort(key=lambda x: x.get("lastmod") or "", reverse=True)
-                logger.info("[CRAWLER] Processing sub-sitemaps (newest first)")
+                logger.info("[CRAWLER] Processing sub-sitemaps (newest first)...")
 
                 # Parse each sub-sitemap in order
-                for sitemap_info in sub_sitemaps:
+                for idx, sitemap_info in enumerate(sub_sitemaps, 1):
                     try:
+                        logger.info(f"[CRAWLER] Parsing sub-sitemap {idx}/{len(sub_sitemaps)}: {sitemap_info['url']}")
                         response = requests.get(
                             sitemap_info["url"], headers={"User-Agent": self.user_agent}, timeout=self.request_timeout
                         )
                         response.raise_for_status()
                         sub_urls = self._parse_sitemap_xml(response.content)
                         urls.extend(sub_urls)
+                        logger.info(
+                            f"[CRAWLER] Sub-sitemap {idx}/{len(sub_sitemaps)}: found {len(sub_urls)} URLs (total: {len(urls)})"
+                        )
                         time.sleep(self.rate_limit_delay)
                     except Exception as e:
                         logger.warning(f"[CRAWLER] Failed to parse sub-sitemap {sitemap_info['url']}: {e}")
+
+                logger.info(f"[CRAWLER] Finished parsing {len(sub_sitemaps)} sub-sitemaps, total URLs: {len(urls)}")
                 return urls
 
             # Regular sitemap with <url> elements
@@ -272,6 +280,8 @@ class DocumentCrawler:
         to_visit = [(self.base_url, 0)]  # (url, depth)
         urls = []
 
+        logger.info(f"[CRAWLER] Starting recursive crawl from {self.base_url} (max depth: {self.max_crawl_depth})...")
+
         while to_visit and (not self.max_pages or len(urls) < self.max_pages):
             current_url, depth = to_visit.pop(0)
 
@@ -292,7 +302,8 @@ class DocumentCrawler:
 
             # Fetch page and extract links
             try:
-                logger.info(f"[CRAWLER] [{len(urls)}/{self.max_pages or '∞'}] Crawling depth {depth}: {current_url}")
+                max_display = f"{self.max_pages}" if self.max_pages else "∞"
+                logger.info(f"[CRAWLER] Crawling [{len(urls)}/{max_display}] depth {depth}: {current_url}")
                 time.sleep(self.rate_limit_delay)
 
                 response = requests.get(

@@ -243,7 +243,7 @@ class DocSearchIndex:
         logger.info(f"[RAG] {len(urls_to_fetch)} new URLs to index (out of {len(url_list)} total)")
 
         # Phase 2: Fetch pages
-        logger.info("[RAG] Phase 2/4: Fetching pages")
+        logger.info(f"[RAG] Phase 2/4: Fetching {len(urls_to_fetch)} pages...")
         start_time = time.time()
         new_pages, failed_urls = self._fetch_pages(urls_to_fetch, failed_urls)
         logger.info(f"[RAG] Fetched {len(new_pages)} new pages in {time.time() - start_time:.1f}s")
@@ -260,15 +260,17 @@ class DocSearchIndex:
             return
 
         # Phase 3: Chunk content
-        logger.info("[RAG] Phase 3/4: Chunking content")
+        logger.info(f"[RAG] Phase 3/4: Chunking {len(new_pages)} pages into semantic segments...")
         start_time = time.time()
 
         # If resuming/expanding, load existing chunks first
         if is_resuming or is_expanding:
-            logger.info("[RAG] Loading existing chunks for incremental update")
+            logger.info("[RAG] Loading existing chunks for incremental update...")
             existing_chunks = self._load_chunks() or []
             existing_parent_chunks = self._load_parent_chunks() or {}
-            logger.info(f"[RAG] Loaded {len(existing_chunks)} existing chunks")
+            logger.info(
+                f"[RAG] Loaded {len(existing_chunks)} existing child chunks, {len(existing_parent_chunks)} parent chunks"
+            )
 
             # Set up for incremental update
             self.chunks = existing_chunks
@@ -282,6 +284,7 @@ class DocSearchIndex:
                     self.child_to_parent[chunk_id] = parent_id
         else:
             # Fresh build - initialize empty
+            logger.info("[RAG] Starting fresh chunking (no existing chunks)...")
             self.chunks = []
             self.parent_chunks = {}
             self.child_to_parent = {}
@@ -294,7 +297,7 @@ class DocSearchIndex:
         logger.info(
             f"[RAG] Created {new_chunk_count} new child chunks from {len(new_pages)} pages in {time.time() - start_time:.1f}s"
         )
-        logger.info(f"[RAG] Total chunks: {len(self.chunks)} (parents: {len(self.parent_chunks)})")
+        logger.info(f"[RAG] Total chunks: {len(self.chunks)} child chunks, {len(self.parent_chunks)} parent chunks")
 
         # Save chunks
         self._save_chunks()
@@ -307,17 +310,20 @@ class DocSearchIndex:
         self._save_crawl_state(crawl_state)
 
         # Phase 4: Build/update index
-        logger.info("[RAG] Phase 4/4: Building search index")
+        logger.info(f"[RAG] Phase 4/4: Building search index from {len(self.chunks)} chunks...")
+        logger.info("[RAG] This may take a few minutes - generating embeddings and building indexes...")
         start_time = time.time()
 
         if is_resuming or is_expanding:
             # Incremental update
+            logger.info("[RAG] Using incremental index update (adding new chunks to existing index)...")
             self._update_index_incremental()
         else:
             # Full rebuild
+            logger.info("[RAG] Building fresh index (full rebuild)...")
             self._build_index()
 
-        logger.info(f"[RAG] Built index in {time.time() - start_time:.1f}s")
+        logger.info(f"[RAG] ✓ Index built successfully in {time.time() - start_time:.1f}s")
 
         # Save metadata
         self._save_metadata(
@@ -331,7 +337,7 @@ class DocSearchIndex:
 
     def load_index(self):
         """Load index from cache."""
-        logger.info("[RAG] Loading index from cache")
+        logger.info("[RAG] Loading index from cache...")
 
         # Load chunks
         self.chunks = self._load_chunks() or []
@@ -342,13 +348,14 @@ class DocSearchIndex:
             return
 
         # Initialize components
+        logger.info("[RAG] Initializing ML models (embeddings, re-rankers)...")
         self._initialize_components()
 
         # Build retrievers
-        logger.info(f"[RAG] Building retrievers from {len(self.chunks)} chunks")
+        logger.info(f"[RAG] Building retrievers from {len(self.chunks)} cached chunks...")
         self._build_retrievers()
 
-        logger.info("[RAG] Index loaded successfully")
+        logger.info("[RAG] ✓ Index loaded successfully")
 
     def search(self, query: str, top_k: int | None = None, return_parent: bool = True) -> list[dict[str, Any]]:
         """Search the document index with hybrid retrieval and re-ranking.
@@ -438,12 +445,14 @@ class DocSearchIndex:
                         # Success - clear any previous failures
                         failed_urls.pop(url, None)
 
-                        if idx % 10 == 0:
+                        # More frequent progress updates (every 5 pages or at key milestones)
+                        if idx % 5 == 0 or idx == total or idx in [1, 10, 25, 50]:
                             logger.info(
-                                f"[RAG] Fetched {idx}/{total} pages ({100*idx/total:.1f}%) - {cache_hits} from cache"
+                                f"[RAG] Fetching pages: {idx}/{total} ({100*idx/total:.1f}%) - {cache_hits} from cache"
                             )
                     else:
                         # Fetch returned None (failure)
+                        logger.warning(f"[RAG] Failed to fetch page: {url}")
                         self._track_url_failure(url, failed_urls, "Failed to fetch page")
 
                 except Exception as e:
@@ -623,9 +632,11 @@ class DocSearchIndex:
                     )
                     self.chunks.append(doc)
 
-                if (idx % 50 == 0) or (idx == len(pages)):
+                # More frequent progress updates (every 10 pages or at key milestones)
+                if idx % 10 == 0 or idx == len(pages) or idx in [1, 5, 25, 50]:
                     logger.info(
-                        f"[RAG] Chunked {idx}/{len(pages)} pages ({100*idx/len(pages):.1f}%) - {len(self.chunks)} chunks so far"
+                        f"[RAG] Chunking: {idx}/{len(pages)} pages ({100*idx/len(pages):.1f}%) - "
+                        f"{len(self.chunks)} child chunks, {len(self.parent_chunks)} parent chunks"
                     )
 
             except Exception as e:
@@ -647,41 +658,55 @@ class DocSearchIndex:
     def _initialize_components(self):
         """Initialize embeddings and cross-encoders."""
         if self.embeddings is None:
-            logger.info(f"[RAG] Loading embedding model: {self.config.embedding_model}")
+            logger.info(f"[RAG] Loading embedding model: {self.config.embedding_model}...")
+            logger.info("[RAG] (First-time model download may take a minute)")
+            start = time.time()
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=self.config.embedding_model,
                 model_kwargs={"device": "cpu"},
                 encode_kwargs={"normalize_embeddings": True},
             )
+            logger.info(f"[RAG] ✓ Embedding model loaded in {time.time() - start:.1f}s")
 
         if self.config.rerank_enabled:
             if self.cross_encoder is None:
-                logger.info(f"[RAG] Loading cross-encoder: {self.config.rerank_model}")
+                logger.info(f"[RAG] Loading cross-encoder: {self.config.rerank_model}...")
+                start = time.time()
                 self.cross_encoder = CrossEncoder(self.config.rerank_model)
+                logger.info(f"[RAG] ✓ Cross-encoder loaded in {time.time() - start:.1f}s")
 
             if self.light_cross_encoder is None:
-                logger.info(f"[RAG] Loading light cross-encoder: {self.config.light_rerank_model}")
+                logger.info(f"[RAG] Loading light cross-encoder: {self.config.light_rerank_model}...")
+                start = time.time()
                 self.light_cross_encoder = CrossEncoder(self.config.light_rerank_model)
+                logger.info(f"[RAG] ✓ Light cross-encoder loaded in {time.time() - start:.1f}s")
 
     def _build_retrievers(self):
         """Build FAISS vector store and hybrid retriever."""
         # Build FAISS index
-        logger.info(f"[RAG] Building FAISS index from {len(self.chunks)} chunks")
+        logger.info(f"[RAG] Building FAISS vector index from {len(self.chunks)} chunks...")
+        logger.info("[RAG] Generating embeddings for all chunks (this is the slowest step)...")
+        start = time.time()
         self.vectorstore = FAISS.from_documents(self.chunks, self.embeddings)
+        logger.info(f"[RAG] ✓ FAISS index built in {time.time() - start:.1f}s")
 
         # Save FAISS index
         faiss_path = str(self.index_dir / "faiss_index")
+        logger.info(f"[RAG] Saving FAISS index to {faiss_path}...")
         self.vectorstore.save_local(faiss_path)
-        logger.info(f"[RAG] Saved FAISS index to {faiss_path}")
+        logger.info("[RAG] ✓ FAISS index saved")
 
         # Build BM25 retriever
-        logger.info("[RAG] Building BM25 retriever")
+        logger.info(f"[RAG] Building BM25 keyword retriever from {len(self.chunks)} chunks...")
+        start = time.time()
         self.bm25_retriever = BM25Retriever.from_documents(self.chunks)
         self.bm25_retriever.k = self.config.search_top_k * 3  # Get more candidates for ensemble
+        logger.info(f"[RAG] ✓ BM25 retriever built in {time.time() - start:.1f}s")
 
         # Build ensemble retriever (hybrid search)
         logger.info(
-            f"[RAG] Building ensemble retriever (BM25: {self.config.hybrid_bm25_weight}, Semantic: {self.config.hybrid_semantic_weight})"
+            f"[RAG] Building hybrid ensemble retriever "
+            f"(BM25 weight: {self.config.hybrid_bm25_weight}, Semantic weight: {self.config.hybrid_semantic_weight})..."
         )
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[
@@ -690,6 +715,7 @@ class DocSearchIndex:
             ],
             weights=[self.config.hybrid_bm25_weight, self.config.hybrid_semantic_weight],
         )
+        logger.info("[RAG] ✓ Ensemble retriever ready")
 
     def _update_index_incremental(self):
         """Update existing index with new documents (incremental).
@@ -715,43 +741,55 @@ class DocSearchIndex:
             self._build_retrievers()
             return
 
-        logger.info(f"[RAG] Incremental update: adding {new_chunk_count} new chunks to existing index")
+        logger.info(
+            f"[RAG] Incremental update: adding {new_chunk_count} new chunks to existing {existing_chunk_count} chunks..."
+        )
 
         # Initialize components if needed
+        logger.info("[RAG] Initializing ML models (embeddings, re-rankers)...")
         self._initialize_components()
 
         # Load existing FAISS index
         faiss_path = str(self.index_dir / "faiss_index")
         try:
-            logger.info(f"[RAG] Loading existing FAISS index from {faiss_path}")
+            logger.info(f"[RAG] Loading existing FAISS index from {faiss_path}...")
+            start = time.time()
             self.vectorstore = FAISS.load_local(
                 faiss_path, self.embeddings, allow_dangerous_deserialization=True  # Safe for our own indexes
             )
-            logger.info(f"[RAG] Loaded existing index with {existing_chunk_count} chunks")
+            logger.info(
+                f"[RAG] ✓ Loaded existing index with {existing_chunk_count} chunks in {time.time() - start:.1f}s"
+            )
 
             # Get only the new chunks
             new_chunks = self.chunks[existing_chunk_count:]
-            logger.info(f"[RAG] Adding {len(new_chunks)} new chunks to FAISS index")
+            logger.info(f"[RAG] Generating embeddings for {len(new_chunks)} new chunks...")
+            start = time.time()
 
             # Add new documents to existing index
             self.vectorstore.add_documents(new_chunks)
+            logger.info(f"[RAG] ✓ Added {len(new_chunks)} new chunks in {time.time() - start:.1f}s")
 
             # Save updated index
+            logger.info(f"[RAG] Saving updated FAISS index to {faiss_path}...")
             self.vectorstore.save_local(faiss_path)
-            logger.info(f"[RAG] Updated FAISS index saved to {faiss_path}")
+            logger.info("[RAG] ✓ Updated FAISS index saved")
 
         except Exception as e:
-            logger.warning(f"[RAG] Failed to load existing FAISS index: {e}, performing full rebuild")
+            logger.warning(f"[RAG] Failed to load existing FAISS index: {e}")
+            logger.info("[RAG] Performing full rebuild instead...")
             self._build_index()
             return
 
         # Rebuild BM25 retriever (fast, must use all chunks)
-        logger.info("[RAG] Rebuilding BM25 retriever with all chunks")
+        logger.info(f"[RAG] Rebuilding BM25 retriever with all {len(self.chunks)} chunks...")
+        start = time.time()
         self.bm25_retriever = BM25Retriever.from_documents(self.chunks)
         self.bm25_retriever.k = self.config.search_top_k * 3
+        logger.info(f"[RAG] ✓ BM25 retriever rebuilt in {time.time() - start:.1f}s")
 
         # Rebuild ensemble retriever
-        logger.info("[RAG] Rebuilding ensemble retriever")
+        logger.info("[RAG] Rebuilding ensemble retriever...")
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[
                 self.bm25_retriever,
@@ -759,6 +797,7 @@ class DocSearchIndex:
             ],
             weights=[self.config.hybrid_bm25_weight, self.config.hybrid_semantic_weight],
         )
+        logger.info("[RAG] ✓ Ensemble retriever ready")
 
     def _rerank_results(self, query: str, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Re-rank results using cross-encoder.
