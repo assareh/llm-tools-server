@@ -4,6 +4,28 @@ A reusable Flask server providing an OpenAI-compatible API for local LLM backend
 
 **Requirements:** Python 3.11+
 
+## API Stability
+
+This project follows [Semantic Versioning](https://semver.org/). Starting with version 1.0:
+
+- **Stable API surface:**
+  - `LLMServer` class instantiation and `run()` method
+  - `ServerConfig` class and `from_env()` factory
+  - Built-in tools: `BUILTIN_TOOLS`, `get_current_datetime`, `calculate`, `create_web_search_tool`, `create_doc_search_tool`
+  - RAG module: `DocSearchIndex`, `RAGConfig`, `search()` method
+  - Evaluation framework: `Evaluator`, `TestCase`, `HTMLReporter`, `JSONReporter`
+  - REST endpoints: `/health`, `/v1/models`, `/v1/chat/completions`
+
+- **Compatibility guarantees:**
+  - Minor versions (1.x) maintain backward compatibility
+  - Breaking changes only in major versions with migration guides
+  - Deprecated features announced at least one minor version before removal
+
+- **Support matrix:**
+  - Python: 3.11, 3.12
+  - Backends: Ollama, LM Studio
+  - Optional extras: `webui`, `websearch`, `rag`, `eval`, `dev`
+
 ## Features
 
 - **OpenAI-compatible API** - Drop-in replacement for OpenAI's `/v1/chat/completions` endpoint

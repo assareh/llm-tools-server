@@ -5,6 +5,80 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-11-27
+
+### Added
+- **CI Pipeline** - GitHub Actions workflow for automated testing
+  - Runs on push/PR to main branch
+  - Tests Python 3.11 and 3.12
+  - Runs Black formatting check and Ruff linting
+  - Runs full pytest suite
+
+- **API Stability Documentation** - Added to README.md
+  - Stable API surface definition
+  - Semver compatibility guarantees
+  - Support matrix (Python versions, backends, extras)
+
+### Documentation
+- Updated 1.0-readiness assessment with resolved status
+- `think` parameter support explicitly deferred to post-1.0
+
+## [0.5.1] - 2025-11-27
+
+### Added
+- **FAISS Security** - SHA256 checksum verification for FAISS index deserialization
+  - Prevents malicious pickle injection attacks on cached indexes
+  - Checksums saved on build, verified on load
+  - Legacy indexes without checksums show warning but still load
+  - Implementation: `rag/indexer.py:775-836`
+
+- **RAG Module Tests** - Comprehensive unit tests for RAG components
+  - `test_rag_chunker.py` - Semantic chunking parent/child relationships
+  - `test_rag_crawler.py` - URL fetching, redirect blocking, content-type filtering
+  - `test_rag_indexer.py` - Index loading and child-to-parent mapping
+  - All tests run without network dependencies
+
+- **Content Deduplication** - RAG indexer now deduplicates pages with identical content
+  - Uses SHA256 content hashing to detect duplicates
+  - Keeps first URL encountered, skips subsequent duplicates
+  - Implementation: `rag/indexer.py:637-652`
+
+### Changed
+- **Cross-encoder Scores** - Now normalized to 0-1 range using min-max scaling
+  - Ensures consistent scoring regardless of model characteristics
+  - Implementation: `rag/indexer.py:991-1003`
+
+- **Readability Fallback** - Now detects and prevents content loss
+  - Falls back to original HTML if >30% content stripped
+  - Falls back if code blocks are removed (technical docs protection)
+  - Implementation: `rag/indexer.py:533-575`
+
+### Documentation
+- Improved RRF (Reciprocal Rank Fusion) documentation in `RAGConfig`
+- Clarified that hybrid weights scale rank contributions, not scores
+
+## [0.5.0] - 2025-11-27
+
+### Added
+- **Doc Search Tool Factory** - `create_doc_search_tool()` for creating RAG-powered tools
+  - Wraps `DocSearchIndex` for LLM tool calling
+  - Customizable tool name and description
+  - Configurable parent context truncation via `RAGConfig.parent_context_max_chars`
+  - Implementation: `builtin_tools.py:168-248`
+
+- **Connection Pooling** - Backend requests now use `requests.Session`
+  - Reuses HTTP connections for better performance
+  - Module-level session shared across requests
+  - Implementation: `backends.py:14-23`
+
+### Changed
+- Parent chunks without children are now indexed directly for search
+  - Ensures all content is searchable even when blocks are too small for child chunks
+
+### Fixed
+- Index parent chunks that have no children (content was being lost)
+- Capture intro content before first heading in RAG chunker
+
 ## [0.4.1] - 2025-11-26
 
 ### Changed
