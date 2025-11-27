@@ -596,6 +596,9 @@ class DocSearchIndex:
                 parents = result.get("parents", [])
                 children = result.get("children", [])
 
+                # Build a set of parent IDs that have children
+                parents_with_children = {child.get("parent_id") for child in children if child.get("parent_id")}
+
                 # Store parent chunks
                 for parent in parents:
                     chunk_id = parent["chunk_id"]
@@ -610,6 +613,23 @@ class DocSearchIndex:
                         "url": page["url"],
                         "lastmod": page.get("lastmod"),
                     }
+
+                    # If this parent has no children, add it directly to searchable chunks
+                    # This ensures content is searchable even when individual content blocks
+                    # are too small to create child chunks
+                    if chunk_id not in parents_with_children:
+                        doc = Document(
+                            page_content=parent["content"],
+                            metadata={
+                                **metadata,
+                                "chunk_id": chunk_id,
+                                "parent_id": None,  # This is a parent chunk, no parent above it
+                                "url": page["url"],
+                                "lastmod": page.get("lastmod"),
+                                "is_parent_as_child": True,  # Flag indicating this parent is indexed directly
+                            },
+                        )
+                        self.chunks.append(doc)
 
                 # Create LangChain Documents from child chunks
                 for child in children:
@@ -706,7 +726,9 @@ class DocSearchIndex:
         logger.info(f"[RAG] Building BM25 keyword retriever from {len(self.chunks)} chunks...")
         start = time.time()
         self.bm25_retriever = BM25Retriever.from_documents(self.chunks)
-        self.bm25_retriever.k = self.config.search_top_k * self.config.retriever_candidate_multiplier  # Get more candidates for ensemble
+        self.bm25_retriever.k = (
+            self.config.search_top_k * self.config.retriever_candidate_multiplier
+        )  # Get more candidates for ensemble
         logger.info(f"[RAG] ✓ BM25 retriever built in {time.time() - start:.1f}s")
 
         # Build ensemble retriever (hybrid search)
@@ -717,7 +739,9 @@ class DocSearchIndex:
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[
                 self.bm25_retriever,
-                self.vectorstore.as_retriever(search_kwargs={"k": self.config.search_top_k * self.config.retriever_candidate_multiplier}),
+                self.vectorstore.as_retriever(
+                    search_kwargs={"k": self.config.search_top_k * self.config.retriever_candidate_multiplier}
+                ),
             ],
             weights=[self.config.hybrid_bm25_weight, self.config.hybrid_semantic_weight],
         )
@@ -799,7 +823,9 @@ class DocSearchIndex:
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[
                 self.bm25_retriever,
-                self.vectorstore.as_retriever(search_kwargs={"k": self.config.search_top_k * self.config.retriever_candidate_multiplier}),
+                self.vectorstore.as_retriever(
+                    search_kwargs={"k": self.config.search_top_k * self.config.retriever_candidate_multiplier}
+                ),
             ],
             weights=[self.config.hybrid_bm25_weight, self.config.hybrid_semantic_weight],
         )
