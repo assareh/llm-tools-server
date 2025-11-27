@@ -34,7 +34,3 @@ jobs:
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
-
-      - name: Check test coverage
-        run: uv run pytest tests/ --cov=llm_api_server --cov-report=term-missing --cov-fail-under=50
-        continue-on-error: true
