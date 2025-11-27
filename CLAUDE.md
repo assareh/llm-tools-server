@@ -216,7 +216,8 @@ The framework provides reusable tools:
 **Optional (requires `--extra rag`):**
 - `create_doc_search_tool(index, name, description)` - RAG document search tool:
   - Wraps a `DocSearchIndex` for LLM tool calling
-  - Hybrid search (BM25 + semantic) with cross-encoder re-ranking
+  - Hybrid search using Reciprocal Rank Fusion (BM25 + semantic)
+  - Cross-encoder re-ranking for final result ordering
   - Returns formatted results with source URLs and parent context
   - Customizable tool name and description per use case
   - Implementation: `llm_api_server/builtin_tools.py`
@@ -280,8 +281,8 @@ The framework includes a comprehensive RAG system in `llm_api_server/rag/`:
 - **Three crawling modes**: Sitemap (auto-discover) → Recursive (fallback) → Manual (explicit)
 - **Semantic HTML chunking** - Respects document structure (headings, code, tables)
 - **Parent-child chunks** - Hierarchical relationships for context
-- **Hybrid search** - BM25 keyword + semantic vector search (configurable weights)
-- **Two-stage re-ranking** - Light cross-encoder → heavy cross-encoder
+- **Hybrid search** - BM25 + semantic via Reciprocal Rank Fusion (RRF)
+- **Cross-encoder re-ranking** - MS MARCO model for accurate final ordering
 - **Incremental updates** - Check timestamps, only rebuild if stale
 - **Local-first** - FAISS vector store, HuggingFace embeddings (all-MiniLM-L6-v2)
 
@@ -304,7 +305,10 @@ from llm_api_server.rag import DocSearchIndex, RAGConfig
 config = RAGConfig(
     base_url="https://docs.example.com",
     cache_dir="./doc_index",
-    hybrid_bm25_weight=0.3,       # 30% keyword, 70% semantic
+    # Hybrid search uses Reciprocal Rank Fusion (RRF), not weighted average.
+    # These weights scale rank contributions: 0.7/0.3 means semantic ranks
+    # are weighted ~2.3x more than BM25 ranks in the fusion formula.
+    hybrid_bm25_weight=0.3,
     hybrid_semantic_weight=0.7,
 )
 
