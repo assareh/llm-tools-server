@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2025-11-27
+
+### Fixed
+- **RAG Readability Fallback** - Smart content extraction when code blocks stripped
+  - When readability strips >50% of code blocks, tries semantic HTML extraction
+  - Extraction priority: `mdxContent` div → `<article>` → `<main>` → original HTML
+  - For HashiCorp docs: reduces content from ~200KB to ~12KB while preserving all code
+  - Works with any site using semantic HTML5 structure
+
 ## [0.6.1] - 2025-11-27
 
 ### Fixed

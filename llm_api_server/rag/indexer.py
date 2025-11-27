@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from bs4 import BeautifulSoup
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
@@ -533,13 +534,14 @@ class DocSearchIndex:
     def _extract_main_content(self, html: str, url: str) -> str:
         """Extract main content from HTML using readability.
 
-        Uses readability to extract the main content, but falls back to the original
-        HTML if readability removes too many code blocks (>50% loss). This protects
-        technical documentation from losing code examples.
+        Uses readability to extract the main content, but falls back to the <main> tag
+        if readability removes too many code blocks (>50% loss). This protects technical
+        documentation from losing code examples while still removing boilerplate.
 
-        Note: We intentionally do NOT check byte-size retention. Modern JS-heavy sites
-        (Next.js, React) often have 80-95% boilerplate (scripts, navigation, hydration
-        JSON), so low byte retention is expected and correct behavior.
+        Fallback strategy:
+        1. Try readability extraction
+        2. If >50% code blocks lost, try extracting <main> tag
+        3. If no <main> tag, use original HTML as last resort
 
         Args:
             html: Raw HTML content
@@ -558,17 +560,64 @@ class DocSearchIndex:
             # Check if code blocks were stripped (>50% loss)
             clean_code_blocks = clean_html.lower().count("<pre") + clean_html.lower().count("<code")
             if original_code_blocks > 0 and clean_code_blocks < original_code_blocks * 0.5:
-                logger.warning(
-                    f"[RAG] Readability stripped code blocks from {url}, using original HTML "
-                    f"(original: {original_code_blocks}, clean: {clean_code_blocks})"
-                )
-                return html
+                # Try extracting <main> tag as fallback (cleaner than full HTML)
+                main_html = self._extract_main_tag(html)
+                if main_html:
+                    main_code_blocks = main_html.lower().count("<pre") + main_html.lower().count("<code")
+                    logger.debug(
+                        f"[RAG] Readability stripped code blocks from {url}, using <main> tag "
+                        f"(readability: {clean_code_blocks}, main: {main_code_blocks}, original: {original_code_blocks})"
+                    )
+                    return main_html
+                else:
+                    # No <main> tag found, fall back to original HTML
+                    logger.warning(
+                        f"[RAG] Readability stripped code blocks from {url}, no <main> tag, using original HTML "
+                        f"(original: {original_code_blocks}, clean: {clean_code_blocks})"
+                    )
+                    return html
 
             logger.debug(f"[RAG] Extracted main content from {url}")
             return clean_html
         except Exception as e:
             logger.warning(f"[RAG] Failed to extract main content from {url}: {e}, using original HTML")
             return html
+
+    def _extract_main_tag(self, html: str) -> str | None:
+        """Extract content from semantic HTML elements as fallback.
+
+        Tries to find the most specific content container:
+        1. div with 'mdxContent' class (HashiCorp/Next.js MDX content)
+        2. <article> tag
+        3. <main> tag
+
+        Args:
+            html: Raw HTML content
+
+        Returns:
+            HTML string of content, or None if not found
+        """
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Try mdxContent div first (HashiCorp docs specific, very clean)
+            mdx_content = soup.find("div", class_=lambda x: x and "mdxContent" in x)
+            if mdx_content:
+                return str(mdx_content)
+
+            # Try article tag
+            article = soup.find("article")
+            if article:
+                return str(article)
+
+            # Fall back to main tag
+            main = soup.find("main")
+            if main:
+                return str(main)
+
+            return None
+        except Exception:
+            return None
 
     def _get_page_cache_path(self, url: str) -> Path:
         """Get cache file path for a URL."""
