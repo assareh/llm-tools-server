@@ -557,23 +557,28 @@ class DocSearchIndex:
             doc = ReadabilityDocument(html, url=url)
             clean_html = doc.summary()
 
-            # Check if code blocks were stripped (>50% loss)
+            # Check if readability failed (returned essentially empty content)
+            # or if code blocks were stripped (>50% loss)
             clean_code_blocks = clean_html.lower().count("<pre") + clean_html.lower().count("<code")
-            if original_code_blocks > 0 and clean_code_blocks < original_code_blocks * 0.5:
-                # Try extracting <main> tag as fallback (cleaner than full HTML)
-                main_html = self._extract_main_tag(html)
-                if main_html:
-                    main_code_blocks = main_html.lower().count("<pre") + main_html.lower().count("<code")
+            readability_failed = len(clean_html) < 100  # Empty or near-empty output
+            code_blocks_stripped = original_code_blocks > 0 and clean_code_blocks < original_code_blocks * 0.5
+
+            if readability_failed or code_blocks_stripped:
+                # Try extracting semantic HTML as fallback (cleaner than full HTML)
+                fallback_html = self._extract_main_tag(html)
+                if fallback_html:
+                    reason = "failed" if readability_failed else "stripped code blocks"
                     logger.debug(
-                        f"[RAG] Readability stripped code blocks from {url}, using <main> tag "
-                        f"(readability: {clean_code_blocks}, main: {main_code_blocks}, original: {original_code_blocks})"
+                        f"[RAG] Readability {reason} from {url}, using semantic HTML fallback "
+                        f"(readability: {len(clean_html)} bytes, fallback: {len(fallback_html)} bytes)"
                     )
-                    return main_html
+                    return fallback_html
                 else:
-                    # No <main> tag found, fall back to original HTML
+                    # No semantic tags found, fall back to original HTML
+                    reason = "failed" if readability_failed else "stripped code blocks"
                     logger.warning(
-                        f"[RAG] Readability stripped code blocks from {url}, no <main> tag, using original HTML "
-                        f"(original: {original_code_blocks}, clean: {clean_code_blocks})"
+                        f"[RAG] Readability {reason} from {url}, no semantic tags, using original HTML "
+                        f"(original: {len(html)} bytes, clean: {len(clean_html)} bytes)"
                     )
                     return html
 
