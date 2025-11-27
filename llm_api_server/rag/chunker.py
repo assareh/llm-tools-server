@@ -113,7 +113,15 @@ def semantic_chunk_html(
 
     # Track heading hierarchy with level stack
     heading_stack = []
-    current_section = None
+
+    # Initialize with a root section for content before the first heading
+    # This ensures intro/overview content is captured
+    current_section = {
+        "heading_stack": [],  # Empty heading stack for root section
+        "content_blocks": [],
+        "code_blocks": [],
+        "tables": [],
+    }
 
     # Walk through all descendants to get content
     processed_elements = set()
