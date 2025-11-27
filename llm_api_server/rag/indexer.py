@@ -44,7 +44,7 @@ class DocSearchIndex:
     """Main document search index with crawling, chunking, embedding, and hybrid search."""
 
     # Index version for cache invalidation
-    INDEX_VERSION = "1.0.0-parent-child"
+    INDEX_VERSION = "1.1.0-chunker-v2"
 
     def __init__(self, config: RAGConfig):
         """Initialize the document search index.
@@ -76,7 +76,6 @@ class DocSearchIndex:
         self.bm25_retriever: BM25Retriever | None = None
         self.ensemble_retriever: EnsembleRetriever | None = None
         self.cross_encoder: CrossEncoder | None = None
-        self.light_cross_encoder: CrossEncoder | None = None
 
         # Storage
         self.chunks: list[Document] = []
@@ -114,6 +113,15 @@ class DocSearchIndex:
         if metadata.get("version") != self.INDEX_VERSION:
             logger.info(
                 f"[RAG] Index version changed (old: {metadata.get('version')}, new: {self.INDEX_VERSION}), needs rebuild"
+            )
+            return True
+
+        # Check embedding model compatibility
+        saved_model = metadata.get("embedding_model")
+        if saved_model and saved_model != self.config.embedding_model:
+            logger.info(
+                f"[RAG] Embedding model changed (index: {saved_model}, config: {self.config.embedding_model}), "
+                "needs rebuild to avoid index corruption"
             )
             return True
 
@@ -331,9 +339,14 @@ class DocSearchIndex:
 
         logger.info(f"[RAG] ✓ Index built successfully in {time.time() - start_time:.1f}s")
 
-        # Save metadata
+        # Save metadata (including embedding model for validation on load)
         self._save_metadata(
-            {"version": self.INDEX_VERSION, "last_update": datetime.now().isoformat(), "num_chunks": len(self.chunks)}
+            {
+                "version": self.INDEX_VERSION,
+                "last_update": datetime.now().isoformat(),
+                "num_chunks": len(self.chunks),
+                "embedding_model": self.config.embedding_model,
+            }
         )
 
         logger.info("[RAG] " + "=" * 70)
@@ -348,6 +361,14 @@ class DocSearchIndex:
         # Load chunks
         self.chunks = self._load_chunks() or []
         self.parent_chunks = self._load_parent_chunks() or {}
+
+        # Rebuild child_to_parent mapping from chunk metadata
+        self.child_to_parent = {}
+        for chunk in self.chunks:
+            chunk_id = chunk.metadata.get("chunk_id")
+            parent_id = chunk.metadata.get("parent_id")
+            if chunk_id and parent_id:
+                self.child_to_parent[chunk_id] = parent_id
 
         if not self.chunks:
             logger.warning("[RAG] No cached chunks found")
@@ -694,18 +715,11 @@ class DocSearchIndex:
             )
             logger.info(f"[RAG] ✓ Embedding model loaded in {time.time() - start:.1f}s")
 
-        if self.config.rerank_enabled:
-            if self.cross_encoder is None:
-                logger.info(f"[RAG] Loading cross-encoder: {self.config.rerank_model}...")
-                start = time.time()
-                self.cross_encoder = CrossEncoder(self.config.rerank_model)
-                logger.info(f"[RAG] ✓ Cross-encoder loaded in {time.time() - start:.1f}s")
-
-            if self.light_cross_encoder is None:
-                logger.info(f"[RAG] Loading light cross-encoder: {self.config.light_rerank_model}...")
-                start = time.time()
-                self.light_cross_encoder = CrossEncoder(self.config.light_rerank_model)
-                logger.info(f"[RAG] ✓ Light cross-encoder loaded in {time.time() - start:.1f}s")
+        if self.config.rerank_enabled and self.cross_encoder is None:
+            logger.info(f"[RAG] Loading cross-encoder: {self.config.rerank_model}...")
+            start = time.time()
+            self.cross_encoder = CrossEncoder(self.config.rerank_model)
+            logger.info(f"[RAG] ✓ Cross-encoder loaded in {time.time() - start:.1f}s")
 
     def _build_retrievers(self):
         """Build FAISS vector store and hybrid retriever."""
@@ -850,19 +864,7 @@ class DocSearchIndex:
 
         logger.debug(f"[RAG] Re-ranking {len(results)} results")
 
-        # Stage 1: Light cross-encoder (fast, reduces candidates)
-        if self.light_cross_encoder and len(results) > self.config.rerank_top_k:
-            pairs = [[query, result["text"]] for result in results]
-            scores = self.light_cross_encoder.predict(pairs)
-
-            for result, score in zip(results, scores):
-                result["light_score"] = float(score)
-
-            # Sort and keep top candidates
-            results = sorted(results, key=lambda x: x["light_score"], reverse=True)[: self.config.rerank_top_k]
-            logger.debug(f"[RAG] Light re-ranker reduced to {len(results)} candidates")
-
-        # Stage 2: Heavy cross-encoder (accurate, final ranking)
+        # Cross-encoder re-ranking (accurate, final ranking)
         if self.cross_encoder:
             pairs = [[query, result["text"]] for result in results]
             scores = self.cross_encoder.predict(pairs)

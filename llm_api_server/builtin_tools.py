@@ -73,6 +73,8 @@ def calculate(expression: str) -> str:
     def eval_node(node):
         """Recursively evaluate AST nodes."""
         if isinstance(node, ast.Constant):  # Numbers
+            if not isinstance(node.value, (int, float, complex)):
+                raise ValueError(f"Only numeric constants allowed, got {type(node.value).__name__}")
             return node.value
         elif isinstance(node, ast.BinOp):  # Binary operations
             op = ALLOWED_OPERATORS.get(type(node.op))
