@@ -652,6 +652,18 @@ class LLMServer:
             if not tool_calls:
                 # No tool calls - return final response using the cleaned message
                 # (which has thinker model reasoning stripped if applicable)
+                content = message.get("content", "")
+
+                # Log warning if response is empty after tool calls were made
+                if not content and tools_used:
+                    self._log_event(
+                        "warning",
+                        "empty_response_after_tools",
+                        f"Empty response from model after {len(tools_used)} tool calls: {tools_used}",
+                        tools_used=tools_used,
+                        iteration=iteration,
+                    )
+
                 return {
                     "id": f"chatcmpl-{int(time.time())}",
                     "object": "chat.completion",
@@ -660,7 +672,7 @@ class LLMServer:
                     "choices": [
                         {
                             "index": 0,
-                            "message": {"role": "assistant", "content": message.get("content", "")},
+                            "message": {"role": "assistant", "content": content},
                             "finish_reason": "stop",
                         }
                     ],
