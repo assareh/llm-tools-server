@@ -234,8 +234,8 @@ The RAG module uses a four-component architecture:
 - **Reciprocal Rank Fusion (RRF)** - combines rankings from both retrievers
 - **Configurable weights** - tune keyword vs semantic emphasis in RRF formula
 
-**Two-Stage Re-ranking:**
-- **Cross-encoder re-ranking** using MS MARCO model
+**Cross-Encoder Re-ranking:**
+- **MS MARCO cross-encoder** for accurate final ranking
 - **Min-max score normalization** for consistent ranking
 - **Configurable candidate pool** (rerank_top_k)
 
@@ -315,9 +315,8 @@ config = RAGConfig(
     rerank_top_k=80,                       # Candidates for re-ranking
 
     # Model settings
-    embedding_model="all-MiniLM-L6-v2",    # HuggingFace model (~80MB)
-    rerank_model="cross-encoder/ms-marco-MiniLM-L-12-v2",      # Heavy cross-encoder
-    light_rerank_model="cross-encoder/ms-marco-MiniLM-L-6-v2", # Light cross-encoder
+    embedding_model="all-MiniLM-L6-v2",               # HuggingFace model (~80MB)
+    rerank_model="cross-encoder/ms-marco-MiniLM-L-12-v2",  # Cross-encoder for re-ranking
 
     # Index settings
     update_check_interval_hours=168,       # Check for updates (7 days)

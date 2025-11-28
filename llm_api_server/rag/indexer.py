@@ -1032,16 +1032,16 @@ class DocSearchIndex:
     def _rerank_results(self, query: str, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Re-rank results using cross-encoder.
 
-        Uses two-stage re-ranking:
-        1. Light cross-encoder for first pass
-        2. Heavy cross-encoder for final ranking
+        This is the second stage of the retrieval pipeline:
+        1. Hybrid retrieval (BM25 + semantic via RRF) produces candidates
+        2. Cross-encoder re-ranking (this method) produces final ranking
 
         Args:
             query: Search query
             results: List of results to re-rank
 
         Returns:
-            Re-ranked results
+            Re-ranked results sorted by cross-encoder score
         """
         if not results:
             return results

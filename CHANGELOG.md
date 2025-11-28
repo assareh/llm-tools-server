@@ -188,7 +188,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Three crawling modes: Sitemap (auto-discover) → Recursive (fallback) → Manual URLs
   - Semantic HTML chunking with parent-child relationships
   - Hybrid search combining BM25 keyword + semantic vector search
-  - Two-stage cross-encoder re-ranking for improved relevance
+  - Cross-encoder re-ranking for improved relevance
   - Incremental updates with timestamp-based staleness detection
   - Local-first architecture with FAISS vector store
   - Robots.txt support with sitemap discovery
