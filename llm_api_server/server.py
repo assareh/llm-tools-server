@@ -479,8 +479,16 @@ class LLMServer:
         # Track tools used during this request
         tools_used: list[str] = []
 
+        # Track tool loop timing
+        tool_loop_start = time.time()
+        timeout = self.config.TOOL_LOOP_TIMEOUT
+
         iteration = 0
         while iteration < max_iterations:
+            # Check timeout (if enabled)
+            if timeout > 0 and (time.time() - tool_loop_start) > timeout:
+                self.logger.warning(f"[TOOL LOOP] TIMEOUT after {timeout}s. Tools used: {tools_used}")
+                break
             iteration += 1
             self.logger.debug(f"[TOOL LOOP] Iteration {iteration}/{max_iterations}")
 
@@ -579,8 +587,86 @@ class LLMServer:
             tool_results = self._execute_tool_calls(tool_calls, tools_used)
             full_messages.extend(tool_results)
 
-        # Max iterations reached
-        self.logger.warning(f"[TOOL LOOP] MAX ITERATIONS REACHED ({max_iterations}). Tools used: {tools_used}")
+        # Tool loop limit reached (timeout or max iterations) - force a final response
+        # Log which limit was hit (timeout was logged above via break, max iterations below)
+        if iteration >= max_iterations:
+            self.logger.warning(f"[TOOL LOOP] MAX ITERATIONS REACHED ({max_iterations}). Tools used: {tools_used}")
+
+        # Generate final response by calling backend WITHOUT tools
+        # This forces the LLM to produce a text response rather than more tool calls
+        return self._generate_final_response(full_messages, temperature, tools_used)
+
+    def _generate_final_response(self, messages: list[dict], temperature: float, tools_used: list[str]) -> dict:
+        """Generate a final response without tools after hitting loop limits.
+
+        When the tool loop reaches max iterations or timeout, we call the backend
+        one more time WITHOUT tools. This forces the LLM to produce a text response
+        synthesizing the information gathered rather than attempting more tool calls.
+
+        Args:
+            messages: Full message history including tool results
+            temperature: Sampling temperature
+            tools_used: List of tool names used during the request
+        """
+        self.logger.info("[TOOL LOOP] Generating final response without tools")
+
+        # Log full message history if debug tools is enabled
+        if self.config.DEBUG_TOOLS:
+            import json
+
+            self.logger.debug(
+                f"[TOOL LOOP] Final response messages payload ({len(messages)} messages):\n"
+                + json.dumps(messages, indent=2, default=str)
+            )
+
+        # Call backend WITHOUT tools to force a text response
+        try:
+            if self.config.BACKEND_TYPE == "ollama":
+                from .backends import call_ollama
+
+                response = call_ollama(
+                    messages,
+                    [],  # Empty tools list
+                    self.config,
+                    temperature,
+                    stream=False,
+                )
+            else:  # lmstudio
+                from .backends import call_lmstudio
+
+                response = call_lmstudio(
+                    messages,
+                    [],  # Empty tools list
+                    self.config,
+                    temperature,
+                    stream=False,
+                )
+            response_data = response.json()
+        except (requests.Timeout, requests.ConnectionError) as e:
+            # If we can't get a final response, return a fallback message
+            self.logger.error(f"[TOOL LOOP] Failed to generate final response: {e}")
+            return {
+                "id": f"chatcmpl-{int(time.time())}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": self.model_name,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "I gathered some information using tools but wasn't able to formulate a complete response. Please try again.",
+                        },
+                        "finish_reason": "error",
+                    }
+                ],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "tools_used": tools_used,
+            }
+
+        # Extract message (no tool calls expected since we didn't provide tools)
+        message, _ = self._extract_message_and_tool_calls(response_data)
+
         return {
             "id": f"chatcmpl-{int(time.time())}",
             "object": "chat.completion",
@@ -589,11 +675,8 @@ class LLMServer:
             "choices": [
                 {
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": "I apologize, but I've reached the maximum number of tool calling iterations.",
-                    },
-                    "finish_reason": "length",
+                    "message": {"role": "assistant", "content": message.get("content", "")},
+                    "finish_reason": "stop",
                 }
             ],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
@@ -637,7 +720,7 @@ class LLMServer:
                     begin_idx = content_buffer.find(begin_marker)
                     if begin_idx != -1:
                         # Found begin marker - discard everything before it (reasoning)
-                        content_buffer = content_buffer[begin_idx + len(begin_marker):]
+                        content_buffer = content_buffer[begin_idx + len(begin_marker) :]
                         in_final_response = True
                         # Strip leading whitespace after marker
                         content_buffer = content_buffer.lstrip()
@@ -646,7 +729,7 @@ class LLMServer:
                         # Keep last len(begin_marker)-1 chars in case marker spans chunks
                         if len(content_buffer) > len(begin_marker):
                             # Discard content that can't be start of marker (it's reasoning)
-                            content_buffer = content_buffer[-(len(begin_marker) - 1):]
+                            content_buffer = content_buffer[-(len(begin_marker) - 1) :]
                         break
                 else:
                     # In final response - look for end marker

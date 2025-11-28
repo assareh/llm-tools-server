@@ -41,6 +41,7 @@ This project follows [Semantic Versioning](https://semver.org/). Starting with v
 - **WebUI integration** - Optional Open Web UI frontend
 - **Smart caching** - System prompt auto-reload on file changes
 - **Debug logging** - Comprehensive tool execution logging
+- **Graceful tool loop completion** - When hitting iteration/timeout limits, generates a synthesized response
 
 ## Installation
 
@@ -360,6 +361,8 @@ With prefix `MYAPP_`:
 - `MYAPP_TEMPERATURE` - Default temperature (default: 0.0)
 - `MYAPP_SYSTEM_PROMPT_PATH` - Path to system prompt file
 - `MYAPP_DEBUG_TOOLS` - Enable tool debug logging (true/false)
+- `MYAPP_MAX_TOOL_ITERATIONS` - Maximum tool loop iterations (default: 5)
+- `MYAPP_TOOL_LOOP_TIMEOUT` - Maximum seconds for tool loop (default: 120, 0 = no timeout)
 - `OLLAMA_ENDPOINT` - Ollama API endpoint
 - `OLLAMA_API_KEY` - Ollama API key for web search (optional)
 - `LMSTUDIO_ENDPOINT` - LM Studio API endpoint

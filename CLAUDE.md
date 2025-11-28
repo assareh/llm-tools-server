@@ -190,6 +190,7 @@ config = ServerConfig.from_env("MYAPP_")
 
 **Key configuration options:**
 - `MAX_TOOL_ITERATIONS`: Maximum tool calling loop iterations (default: 5)
+- `TOOL_LOOP_TIMEOUT`: Maximum seconds for entire tool loop, 0 = no timeout (default: 120)
 - `RATE_LIMIT_ENABLED`: Enable API rate limiting (default: False)
 - `RATE_LIMIT_DEFAULT`: Rate limit string, e.g., "100 per minute"
 - `RATE_LIMIT_STORAGE_URI`: Storage backend for rate limiting (default: "memory://")
@@ -373,5 +374,5 @@ When making changes, test in both projects.
 
 ---
 
-*Last updated: 2025-11-26*
-*Version: 0.7.0*
+*Last updated: 2025-11-28*
+*Version: 0.7.1*
