@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import torch
 from bs4 import BeautifulSoup
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
@@ -809,9 +810,17 @@ class DocSearchIndex:
             logger.info(f"[RAG] Loading embedding model: {self.config.embedding_model}...")
             logger.info("[RAG] (First-time model download may take a minute)")
             start = time.time()
+            # Auto-detect best device (MPS for Apple Silicon, CUDA for NVIDIA, else CPU)
+            if torch.backends.mps.is_available():
+                device = "mps"
+            elif torch.cuda.is_available():
+                device = "cuda"
+            else:
+                device = "cpu"
+            logger.info(f"[RAG] Using device: {device}")
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=self.config.embedding_model,
-                model_kwargs={"device": "cpu"},
+                model_kwargs={"device": device},
                 encode_kwargs={"normalize_embeddings": True},
             )
             logger.info(f"[RAG] ✓ Embedding model loaded in {time.time() - start:.1f}s")
