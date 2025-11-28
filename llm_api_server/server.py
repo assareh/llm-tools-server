@@ -781,6 +781,17 @@ class LLMServer:
 
         # Extract message (no tool calls expected since we didn't provide tools)
         message, _ = self._extract_message_and_tool_calls(response_data)
+        content = message.get("content", "")
+
+        # Log warning if final response is empty after tool calls
+        if not content and tools_used:
+            self._log_event(
+                "warning",
+                "empty_final_response",
+                f"Empty final response from model after timeout/max iterations. Tools used: {tools_used}",
+                tools_used=tools_used,
+                raw_response=response_data,
+            )
 
         return {
             "id": f"chatcmpl-{int(time.time())}",
@@ -790,7 +801,7 @@ class LLMServer:
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": message.get("content", "")},
+                    "message": {"role": "assistant", "content": content},
                     "finish_reason": "stop",
                 }
             ],
