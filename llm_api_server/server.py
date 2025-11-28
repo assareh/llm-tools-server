@@ -508,11 +508,6 @@ class LLMServer:
 
             tool_result = self.execute_tool(tool_name, tool_args)
 
-            # Truncate large results to prevent unbounded memory growth
-            max_chars = self.config.MAX_TOOL_RESULT_CHARS
-            if len(tool_result) > max_chars:
-                tool_result = tool_result[:max_chars] + f"\n\n[Truncated - {len(tool_result)} total chars]"
-
             # Format result message for backend
             if self.config.BACKEND_TYPE == "lmstudio":
                 result_messages.append({"role": "tool", "tool_call_id": tool_call.get("id"), "content": tool_result})
