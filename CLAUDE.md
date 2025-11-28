@@ -194,6 +194,29 @@ config = ServerConfig.from_env("MYAPP_")
 - `RATE_LIMIT_DEFAULT`: Rate limit string, e.g., "100 per minute"
 - `RATE_LIMIT_STORAGE_URI`: Storage backend for rate limiting (default: "memory://")
 
+**Debug logging options:**
+- `DEBUG_TOOLS`: Enable debug logging for tool calls (default: False)
+- `DEBUG_TOOLS_LOG_FILE`: Log file path (default: "tools_debug.log")
+- `DEBUG_LOG_FORMAT`: Log format - "text", "json", or "yaml" (default: "text")
+- `DEBUG_LOG_MAX_RESPONSE_LENGTH`: Max response chars in logs, 0 = no truncation (default: 1000)
+
+**Structured log formats:**
+- `text`: Human-readable format with separators and labeled fields
+- `json`: Machine-parseable, one JSON object per log entry (use with `jq`)
+- `yaml`: Human-readable structured format with literal blocks for multiline
+
+Example JSON log parsing:
+```bash
+# Filter by tool name
+cat tools_debug.log | jq 'select(.tool == "doc_search")'
+
+# Find slow tool calls (>5 seconds)
+cat tools_debug.log | jq 'select(.duration_ms > 5000)'
+
+# Get full responses without truncation
+DEBUG_LOG_FORMAT=json DEBUG_LOG_MAX_RESPONSE_LENGTH=0
+```
+
 ### Backend Support
 - **Ollama**: Native Ollama API format
 - **LM Studio**: OpenAI-compatible format
@@ -351,4 +374,4 @@ When making changes, test in both projects.
 ---
 
 *Last updated: 2025-11-26*
-*Version: 0.4.1*
+*Version: 0.6.4*

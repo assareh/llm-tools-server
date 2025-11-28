@@ -56,6 +56,8 @@ class ServerConfig:
     DEBUG_TOOLS_LOG_FILE: str = "tools_debug.log"
     DEBUG_LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 10MB default
     DEBUG_LOG_BACKUP_COUNT: int = 5  # Keep 5 backup files
+    DEBUG_LOG_FORMAT: Literal["text", "json", "yaml"] = "text"  # Log format: text, json, or yaml
+    DEBUG_LOG_MAX_RESPONSE_LENGTH: int = 1000  # Max response chars in logs (0 = no truncation)
 
     # Backend timeout settings (in seconds)
     BACKEND_CONNECT_TIMEOUT: int = 10  # Connection timeout
@@ -120,6 +122,13 @@ class ServerConfig:
         config.DEBUG_TOOLS_LOG_FILE = get_env("DEBUG_TOOLS_LOG_FILE", cls.DEBUG_TOOLS_LOG_FILE)
         config.DEBUG_LOG_MAX_BYTES = int(get_env("DEBUG_LOG_MAX_BYTES", str(cls.DEBUG_LOG_MAX_BYTES)))
         config.DEBUG_LOG_BACKUP_COUNT = int(get_env("DEBUG_LOG_BACKUP_COUNT", str(cls.DEBUG_LOG_BACKUP_COUNT)))
+        debug_format = get_env("DEBUG_LOG_FORMAT", cls.DEBUG_LOG_FORMAT)
+        if debug_format not in ("text", "json", "yaml"):
+            debug_format = "text"
+        config.DEBUG_LOG_FORMAT = debug_format
+        config.DEBUG_LOG_MAX_RESPONSE_LENGTH = int(
+            get_env("DEBUG_LOG_MAX_RESPONSE_LENGTH", str(cls.DEBUG_LOG_MAX_RESPONSE_LENGTH))
+        )
         config.BACKEND_CONNECT_TIMEOUT = int(get_env("BACKEND_CONNECT_TIMEOUT", str(cls.BACKEND_CONNECT_TIMEOUT)))
         config.BACKEND_READ_TIMEOUT = int(get_env("BACKEND_READ_TIMEOUT", str(cls.BACKEND_READ_TIMEOUT)))
         config.HEALTH_CHECK_ON_STARTUP = _parse_bool_env(

@@ -125,6 +125,96 @@ class LLMServer:
         # Register routes
         self._register_routes()
 
+    def _log_tool_event(
+        self,
+        event: str,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        response: str | None = None,
+        duration_ms: float | None = None,
+        error: str | None = None,
+    ):
+        """Log a tool event in the configured format (text, json, or yaml).
+
+        Args:
+            event: Event type (e.g., "tool_call", "tool_error")
+            tool_name: Name of the tool
+            tool_input: Input parameters to the tool
+            response: Tool response (optional)
+            duration_ms: Duration in milliseconds (optional)
+            error: Error message if applicable (optional)
+        """
+        log_format = self.config.DEBUG_LOG_FORMAT
+        max_len = self.config.DEBUG_LOG_MAX_RESPONSE_LENGTH
+
+        # Apply truncation if configured
+        log_response = response
+        if response and max_len > 0 and len(response) > max_len:
+            log_response = response[:max_len] + f"\n... (truncated, total: {len(response)} chars)"
+
+        if log_format == "json":
+            import datetime
+
+            log_entry = {
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                "event": event,
+                "tool": tool_name,
+                "input": tool_input,
+            }
+            if duration_ms is not None:
+                log_entry["duration_ms"] = round(duration_ms, 2)
+            if response is not None:
+                log_entry["response_length"] = len(response)
+                log_entry["response"] = log_response
+            if error is not None:
+                log_entry["error"] = error
+            self.logger.debug(json.dumps(log_entry, ensure_ascii=False))
+
+        elif log_format == "yaml":
+            import datetime
+
+            # Build YAML manually to avoid adding pyyaml dependency
+            timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+            lines = [
+                "---",
+                f"timestamp: {timestamp}",
+                f"event: {event}",
+                f"tool: {tool_name}",
+                "input:",
+            ]
+            for key, value in tool_input.items():
+                # Simple YAML serialization for common types
+                if isinstance(value, str):
+                    lines.append(f"  {key}: {json.dumps(value)}")
+                else:
+                    lines.append(f"  {key}: {json.dumps(value)}")
+            if duration_ms is not None:
+                lines.append(f"duration_ms: {round(duration_ms, 2)}")
+            if response is not None:
+                lines.append(f"response_length: {len(response)}")
+                # Use YAML literal block for multiline responses
+                if "\n" in (log_response or ""):
+                    lines.append("response: |")
+                    for line in (log_response or "").split("\n"):
+                        lines.append(f"  {line}")
+                else:
+                    lines.append(f"response: {json.dumps(log_response)}")
+            if error is not None:
+                lines.append(f"error: {json.dumps(error)}")
+            self.logger.debug("\n".join(lines))
+
+        else:  # text format (default)
+            self.logger.debug("=" * 80)
+            self.logger.debug(f"TOOL CALL: {tool_name}")
+            self.logger.debug(f"INPUT: {json.dumps(tool_input, indent=2)}")
+            if duration_ms is not None:
+                self.logger.debug(f"DURATION: {round(duration_ms, 2)}ms")
+            if error is not None:
+                self.logger.debug(f"ERROR: {error}")
+            elif response is not None:
+                self.logger.debug(f"RESPONSE: {log_response}")
+            self.logger.debug("=" * 80 + "\n")
+
     def _register_routes(self):
         """Register Flask routes."""
         self.app.route("/health", methods=["GET"])(self.health)
@@ -169,48 +259,57 @@ class LLMServer:
 
     def execute_tool(self, tool_name: str, tool_input: dict[str, Any]) -> str:
         """Execute a tool by name with given input."""
-        # Log tool call
-        if self.config.DEBUG_TOOLS:
-            self.logger.debug("=" * 80)
-            self.logger.debug(f"TOOL CALL: {tool_name}")
-            self.logger.debug(f"INPUT: {json.dumps(tool_input, indent=2)}")
+        start_time = time.time()
 
         for tool in self.tools:
             if tool.name == tool_name:
                 try:
                     result = tool.func(**tool_input)
                     result_str = str(result)
+                    duration_ms = (time.time() - start_time) * 1000
 
-                    # Log tool response
+                    # Log tool call with response
                     if self.config.DEBUG_TOOLS:
-                        if len(result_str) > 1000:
-                            truncated = result_str[:1000] + f"\n... (truncated, total length: {len(result_str)} chars)"
-                            self.logger.debug(f"RESPONSE: {truncated}")
-                        else:
-                            self.logger.debug(f"RESPONSE: {result_str}")
-                        self.logger.debug("=" * 80 + "\n")
+                        self._log_tool_event(
+                            event="tool_call",
+                            tool_name=tool_name,
+                            tool_input=tool_input,
+                            response=result_str,
+                            duration_ms=duration_ms,
+                        )
 
                     return result_str
                 except Exception as e:
+                    duration_ms = (time.time() - start_time) * 1000
                     error_msg = f"Error executing tool '{tool_name}': {type(e).__name__}: {e!s}"
+                    full_error = f"{error_msg}\n\nFull traceback:\n{traceback.format_exc()}"
 
-                    # Enhanced error logging with full traceback in debug mode
+                    # Log tool error
                     if self.config.DEBUG_TOOLS:
-                        self.logger.error(f"ERROR: {error_msg}")
-                        self.logger.error(f"Tool input: {json.dumps(tool_input, indent=2)}")
-                        self.logger.error(f"Full traceback:\n{traceback.format_exc()}")
-                        self.logger.debug("=" * 80 + "\n")
+                        self._log_tool_event(
+                            event="tool_error",
+                            tool_name=tool_name,
+                            tool_input=tool_input,
+                            duration_ms=duration_ms,
+                            error=full_error,
+                        )
 
                     # Return user-friendly error message
                     return f"{error_msg}\n\nTip: Enable DEBUG_TOOLS for detailed error logs."
 
         # Tool not found
+        duration_ms = (time.time() - start_time) * 1000
         available_tools = [t.name for t in self.tools]
         not_found_msg = f"Tool '{tool_name}' not found. Available tools: {', '.join(available_tools)}"
 
         if self.config.DEBUG_TOOLS:
-            self.logger.error(f"ERROR: {not_found_msg}")
-            self.logger.debug("=" * 80 + "\n")
+            self._log_tool_event(
+                event="tool_not_found",
+                tool_name=tool_name,
+                tool_input=tool_input,
+                duration_ms=duration_ms,
+                error=not_found_msg,
+            )
 
         return not_found_msg
 
