@@ -362,7 +362,12 @@ class DocSearchIndex:
         logger.info("[RAG] " + "=" * 70)
 
     def load_index(self):
-        """Load index from cache."""
+        """Load index from cache.
+
+        Attempts to load the persisted FAISS index first for fast startup.
+        Falls back to rebuilding from chunks if the saved index is missing or corrupted.
+        BM25 retriever is always rebuilt (not persisted) but this is fast.
+        """
         logger.info("[RAG] Loading index from cache...")
 
         # Load chunks
@@ -385,9 +390,64 @@ class DocSearchIndex:
         logger.info("[RAG] Initializing ML models (embeddings, re-rankers)...")
         self._initialize_components()
 
-        # Build retrievers
-        logger.info(f"[RAG] Building retrievers from {len(self.chunks)} cached chunks...")
-        self._build_retrievers()
+        # Try to load persisted FAISS index first (fast path)
+        faiss_path = str(self.index_dir / "faiss_index")
+        faiss_loaded = False
+
+        if Path(faiss_path).exists():
+            try:
+                # Verify checksum before loading (raises ValueError if tampered)
+                self._verify_faiss_checksum(faiss_path)
+
+                logger.info(f"[RAG] Loading persisted FAISS index from {faiss_path}...")
+                start = time.time()
+                self.vectorstore = FAISS.load_local(
+                    faiss_path, self.embeddings, allow_dangerous_deserialization=True  # Checksum verified above
+                )
+                logger.info(f"[RAG] ✓ Loaded FAISS index in {time.time() - start:.1f}s")
+                faiss_loaded = True
+            except Exception as e:
+                logger.warning(f"[RAG] Failed to load persisted FAISS index: {e}")
+                logger.info("[RAG] Will rebuild FAISS index from chunks...")
+
+        if not faiss_loaded:
+            # Fall back to rebuilding FAISS from chunks (slow path)
+            logger.info(f"[RAG] Building FAISS vector index from {len(self.chunks)} chunks...")
+            logger.info("[RAG] Generating embeddings for all chunks (this is the slowest step)...")
+            start = time.time()
+            self.vectorstore = FAISS.from_documents(self.chunks, self.embeddings)
+            logger.info(f"[RAG] ✓ FAISS index built in {time.time() - start:.1f}s")
+
+            # Save the rebuilt index for next time
+            logger.info(f"[RAG] Saving FAISS index to {faiss_path}...")
+            self.vectorstore.save_local(faiss_path)
+            self._save_faiss_checksum(faiss_path)
+            logger.info("[RAG] ✓ FAISS index saved")
+
+        # Build BM25 retriever (always rebuilt, fast)
+        logger.info(f"[RAG] Building BM25 keyword retriever from {len(self.chunks)} chunks...")
+        start = time.time()
+        self.bm25_retriever = BM25Retriever.from_documents(self.chunks)
+        self.bm25_retriever.k = (
+            self.config.search_top_k * self.config.retriever_candidate_multiplier
+        )  # Get more candidates for ensemble
+        logger.info(f"[RAG] ✓ BM25 retriever built in {time.time() - start:.1f}s")
+
+        # Build ensemble retriever (hybrid search)
+        logger.info(
+            f"[RAG] Building hybrid ensemble retriever "
+            f"(BM25 weight: {self.config.hybrid_bm25_weight}, Semantic weight: {self.config.hybrid_semantic_weight})..."
+        )
+        self.ensemble_retriever = EnsembleRetriever(
+            retrievers=[
+                self.bm25_retriever,
+                self.vectorstore.as_retriever(
+                    search_kwargs={"k": self.config.search_top_k * self.config.retriever_candidate_multiplier}
+                ),
+            ],
+            weights=[self.config.hybrid_bm25_weight, self.config.hybrid_semantic_weight],
+        )
+        logger.info("[RAG] ✓ Ensemble retriever ready")
 
         logger.info("[RAG] ✓ Index loaded successfully")
 
