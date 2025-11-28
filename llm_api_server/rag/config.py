@@ -45,6 +45,9 @@ class RAGConfig:
 
         # Index settings
         update_check_interval_hours: Hours between index update checks (default: 168 = 7 days)
+        page_cache_ttl_hours: TTL for cached pages without lastmod (default: 168 = 7 days, 0 = never expire).
+            Pages with lastmod from sitemap are invalidated when lastmod changes.
+            Pages without lastmod are invalidated after this TTL expires.
     """
 
     # Core settings
@@ -84,6 +87,7 @@ class RAGConfig:
 
     # Index settings
     update_check_interval_hours: int = 168  # 7 days
+    page_cache_ttl_hours: int = 168  # 7 days - TTL for cached pages without lastmod (0 = never expire)
 
     def __post_init__(self):
         """Convert cache_dir to Path and validate weights."""

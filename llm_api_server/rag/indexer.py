@@ -156,16 +156,18 @@ class DocSearchIndex:
 
         return needs_update
 
-    def crawl_and_index(self, force_rebuild: bool = False):
+    def crawl_and_index(self, force_rebuild: bool = False, force_refresh: bool = False):
         """Discover URLs, crawl pages, chunk content, and build search index.
 
         Supports:
         - Incremental updates (resume interrupted crawls)
         - Expanding max_pages limit without full rebuild
         - Stateful crawling with progress tracking
+        - Staleness refresh for existing URLs (TTL-based or forced)
 
         Args:
-            force_rebuild: Force full rebuild even if index is up-to-date
+            force_rebuild: Force full rebuild of index and crawl state (clears all state)
+            force_refresh: Force refetch of all cached pages (bypasses page cache, but keeps crawl state)
         """
         if not force_rebuild and not self.needs_update():
             logger.info("[RAG] Index is up-to-date, loading from cache")
@@ -192,12 +194,17 @@ class DocSearchIndex:
             and self.config.max_pages > previous_max_pages
         )
 
+        # Determine if we're doing a refresh of existing content
+        is_refreshing = force_refresh or (is_resuming and self.needs_update())
+
         if force_rebuild:
             logger.info("[RAG] Force rebuild requested, starting fresh")
             indexed_urls_set = set()
             discovered_urls = []
             crawl_complete = False
             failed_urls = {}
+        elif force_refresh:
+            logger.info("[RAG] Force refresh requested, will refetch all pages")
         elif is_resuming:
             logger.info(f"[RAG] Resuming crawl: {len(indexed_urls_set)} URLs already indexed")
         elif is_expanding:
@@ -238,8 +245,14 @@ class DocSearchIndex:
             logger.error("[RAG] No URLs discovered!")
             return
 
-        # Filter out already-indexed URLs
-        urls_to_fetch = [url_info for url_info in url_list if url_info["url"] not in indexed_urls_set]
+        # Determine which URLs to fetch
+        # - force_refresh: fetch all URLs (existing ones will have cache bypassed)
+        # - normal mode: only fetch new URLs not already indexed
+        if is_refreshing:
+            urls_to_fetch = url_list  # Fetch all URLs, cache bypass handled by force_refresh
+            logger.info(f"[RAG] Refresh mode: will check {len(urls_to_fetch)} URLs for staleness")
+        else:
+            urls_to_fetch = [url_info for url_info in url_list if url_info["url"] not in indexed_urls_set]
 
         # Filter out URLs that have failed too many times
         skipped_urls = []
@@ -261,13 +274,16 @@ class DocSearchIndex:
             self.load_index()
             return
 
-        logger.info(f"[RAG] {len(urls_to_fetch)} new URLs to index (out of {len(url_list)} total)")
+        if is_refreshing:
+            logger.info(f"[RAG] {len(urls_to_fetch)} URLs to check/refresh (out of {len(url_list)} total)")
+        else:
+            logger.info(f"[RAG] {len(urls_to_fetch)} new URLs to index (out of {len(url_list)} total)")
 
         # Phase 2: Fetch pages
         logger.info(f"[RAG] Phase 2/4: Fetching {len(urls_to_fetch)} pages...")
         start_time = time.time()
-        new_pages, failed_urls = self._fetch_pages(urls_to_fetch, failed_urls)
-        logger.info(f"[RAG] Fetched {len(new_pages)} new pages in {time.time() - start_time:.1f}s")
+        new_pages, failed_urls = self._fetch_pages(urls_to_fetch, failed_urls, force_refresh=force_refresh)
+        logger.info(f"[RAG] Fetched {len(new_pages)} pages in {time.time() - start_time:.1f}s")
 
         # Save updated failure tracking
         crawl_state["failed_urls"] = failed_urls
@@ -284,14 +300,31 @@ class DocSearchIndex:
         logger.info(f"[RAG] Phase 3/4: Chunking {len(new_pages)} pages into semantic segments...")
         start_time = time.time()
 
-        # If resuming/expanding, load existing chunks first
-        if is_resuming or is_expanding:
+        # Identify refreshed pages (pages that were refetched, not from cache)
+        refreshed_urls = {page["url"] for page in new_pages if not page.get("from_cache")}
+
+        # If resuming/expanding/refreshing, load existing chunks first
+        if is_resuming or is_expanding or is_refreshing:
             logger.info("[RAG] Loading existing chunks for incremental update...")
             existing_chunks = self._load_chunks() or []
             existing_parent_chunks = self._load_parent_chunks() or {}
             logger.info(
                 f"[RAG] Loaded {len(existing_chunks)} existing child chunks, {len(existing_parent_chunks)} parent chunks"
             )
+
+            # When refreshing, remove old chunks for URLs that were refetched
+            if refreshed_urls:
+                logger.info(f"[RAG] Removing old chunks for {len(refreshed_urls)} refreshed URLs...")
+                # Filter out chunks belonging to refreshed URLs
+                existing_chunks = [c for c in existing_chunks if c.metadata.get("url") not in refreshed_urls]
+                # Filter out parent chunks for refreshed URLs
+                existing_parent_chunks = {
+                    k: v for k, v in existing_parent_chunks.items() if v.get("url") not in refreshed_urls
+                }
+                logger.info(
+                    f"[RAG] After removing stale chunks: {len(existing_chunks)} child, "
+                    f"{len(existing_parent_chunks)} parent"
+                )
 
             # Set up for incremental update
             self.chunks = existing_chunks
@@ -335,8 +368,16 @@ class DocSearchIndex:
         logger.info("[RAG] This may take a few minutes - generating embeddings and building indexes...")
         start_time = time.time()
 
-        if is_resuming or is_expanding:
-            # Incremental update
+        # Determine update strategy:
+        # - Refreshing with replaced content: must rebuild (can't incrementally remove from FAISS)
+        # - Resuming/expanding without refresh: can use incremental
+        # - Fresh build: full rebuild
+        if refreshed_urls:
+            # Full rebuild required when content was replaced
+            logger.info(f"[RAG] Full rebuild required ({len(refreshed_urls)} URLs refreshed)...")
+            self._build_index()
+        elif is_resuming or is_expanding:
+            # Incremental update (only adding new content)
             logger.info("[RAG] Using incremental index update (adding new chunks to existing index)...")
             self._update_index_incremental()
         else:
@@ -512,13 +553,14 @@ class DocSearchIndex:
         return results[:top_k]
 
     def _fetch_pages(
-        self, url_list: list[dict[str, Any]], failed_urls: dict[str, Any]
+        self, url_list: list[dict[str, Any]], failed_urls: dict[str, Any], force_refresh: bool = False
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Fetch pages with caching and parallel fetching, tracking failures.
 
         Args:
             url_list: List of URL info dicts
             failed_urls: Dict of failed URL tracking info
+            force_refresh: If True, skip cache and refetch all pages
 
         Returns:
             Tuple of (list of page data dicts, updated failed_urls dict)
@@ -529,7 +571,9 @@ class DocSearchIndex:
 
         with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
             # Submit all fetch tasks (with cache check)
-            future_to_url = {executor.submit(self._fetch_page_with_cache, url_info): url_info for url_info in url_list}
+            future_to_url = {
+                executor.submit(self._fetch_page_with_cache, url_info, force_refresh): url_info for url_info in url_list
+            }
 
             # Process completed tasks
             for idx, future in enumerate(as_completed(future_to_url), 1):
@@ -564,11 +608,12 @@ class DocSearchIndex:
 
         return pages, failed_urls
 
-    def _fetch_page_with_cache(self, url_info: dict[str, Any]) -> dict[str, Any] | None:
+    def _fetch_page_with_cache(self, url_info: dict[str, Any], force_refresh: bool = False) -> dict[str, Any] | None:
         """Fetch a page with caching support.
 
         Args:
             url_info: URL info dict with url and optional lastmod
+            force_refresh: If True, skip cache and refetch page
 
         Returns:
             Page data dict or None if failed
@@ -576,8 +621,8 @@ class DocSearchIndex:
         url = url_info["url"]
         lastmod = url_info.get("lastmod")
 
-        # Try to load from cache
-        cached = self._load_cached_page(url, lastmod)
+        # Try to load from cache (respects force_refresh and TTL)
+        cached = self._load_cached_page(url, lastmod, force_refresh=force_refresh)
         if cached:
             return cached
 
@@ -696,16 +741,22 @@ class DocSearchIndex:
         url_hash = hashlib.sha256(url.encode()).hexdigest()[:32]
         return self.content_dir / f"{url_hash}.json"
 
-    def _load_cached_page(self, url: str, lastmod: str | None) -> dict[str, Any] | None:
+    def _load_cached_page(self, url: str, lastmod: str | None, force_refresh: bool = False) -> dict[str, Any] | None:
         """Load cached page content if still valid.
 
         Args:
             url: Page URL
             lastmod: Last modification date from sitemap
+            force_refresh: If True, skip cache entirely and refetch
 
         Returns:
             Cached page data or None if cache invalid
         """
+        # Skip cache entirely if force_refresh requested
+        if force_refresh:
+            logger.debug(f"[RAG] Force refresh requested, skipping cache for {url}")
+            return None
+
         cache_path = self._get_page_cache_path(url)
         if not cache_path.exists():
             return None
@@ -713,10 +764,21 @@ class DocSearchIndex:
         try:
             cached = json.loads(cache_path.read_text())
 
-            # Check if lastmod matches (if we have one)
+            # Check if lastmod matches (if we have one from sitemap)
             if lastmod and cached.get("lastmod") != lastmod:
                 logger.debug(f"[RAG] Cache invalidated for {url} (lastmod changed)")
                 return None
+
+            # If no lastmod, apply TTL-based invalidation
+            if not lastmod and self.config.page_cache_ttl_hours > 0:
+                cached_at = cached.get("cached_at")
+                if cached_at:
+                    cached_time = datetime.fromisoformat(cached_at)
+                    age = datetime.now() - cached_time
+                    ttl = timedelta(hours=self.config.page_cache_ttl_hours)
+                    if age >= ttl:
+                        logger.debug(f"[RAG] Cache expired for {url} (age: {age}, TTL: {ttl})")
+                        return None
 
             # Mark as from cache
             cached["from_cache"] = True
@@ -728,11 +790,12 @@ class DocSearchIndex:
             return None
 
     def _save_cached_page(self, page_data: dict[str, Any]):
-        """Save page content to cache."""
+        """Save page content to cache with timestamp for TTL-based invalidation."""
         try:
             cache_path = self._get_page_cache_path(page_data["url"])
-            # Don't save the from_cache flag
+            # Don't save the from_cache flag, add cached_at timestamp
             save_data = {k: v for k, v in page_data.items() if k != "from_cache"}
+            save_data["cached_at"] = datetime.now().isoformat()
             cache_path.write_text(json.dumps(save_data))
             logger.debug(f"[RAG] Cached: {page_data['url']}")
         except Exception as e:
