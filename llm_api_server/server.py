@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import threading
 import time
 import traceback
@@ -99,9 +100,14 @@ class LLMServer:
             )
             file_handler.setLevel(logging.DEBUG)
 
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-            )
+            # For JSON format, use minimal formatter (just the message) for pure JSON lines
+            # that can be parsed with tools like jq. For text/yaml, include metadata prefix.
+            if config.DEBUG_LOG_FORMAT == "json":
+                formatter = logging.Formatter("%(message)s")
+            else:
+                formatter = logging.Formatter(
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+                )
             file_handler.setFormatter(formatter)
 
             for logger_name in logger_names:
@@ -220,6 +226,7 @@ class LLMServer:
         self.app.route("/health", methods=["GET"])(self.health)
         self.app.route("/v1/models", methods=["GET"])(self.list_models)
         self.app.route("/v1/chat/completions", methods=["POST"])(self.chat_completions)
+        self.app.route("/config/model", methods=["GET", "POST"])(self.config_model)
 
     def get_system_prompt(self) -> str:
         """Load system prompt from markdown file with smart caching.
@@ -341,7 +348,66 @@ class LLMServer:
             choice = response_data.get("choices", [{}])[0]
             message = choice.get("message", {})
             tool_calls = message.get("tool_calls", [])
+
+        # Handle thinker models (like Apriel) that embed responses in markers
+        if not tool_calls:
+            content = message.get("content", "")
+            if "[BEGIN FINAL RESPONSE]" in content:
+                cleaned_content, tool_calls = self._parse_thinker_response(content)
+                # Update message with cleaned content (without reasoning)
+                message = dict(message)
+                message["content"] = cleaned_content
+
         return message, tool_calls
+
+    def _parse_thinker_response(self, content: str) -> tuple[str, list]:
+        """Parse response from thinker models that include reasoning.
+
+        Extracts content from [BEGIN FINAL RESPONSE]...[END FINAL RESPONSE] markers
+        and parses any embedded <tool_calls> within.
+
+        Args:
+            content: Full message content including reasoning
+
+        Returns:
+            Tuple of (cleaned content, tool_calls list)
+        """
+        # Extract content between markers
+        match = re.search(
+            r"\[BEGIN FINAL RESPONSE\]\s*(.*?)\s*\[END FINAL RESPONSE\]",
+            content,
+            re.DOTALL,
+        )
+        if not match:
+            return content, []
+
+        final_content = match.group(1).strip()
+
+        # Check for embedded tool calls within the final response
+        tool_calls = []
+        if "<tool_calls>" in final_content:
+            tool_match = re.search(r"<tool_calls>\s*(\[.*?\])\s*</tool_calls>", final_content, re.DOTALL)
+            if tool_match:
+                try:
+                    raw_calls = json.loads(tool_match.group(1))
+                    for i, call in enumerate(raw_calls):
+                        tool_calls.append(
+                            {
+                                "id": f"call_{i}",
+                                "type": "function",
+                                "function": {
+                                    "name": call.get("name"),
+                                    "arguments": json.dumps(call.get("arguments", {})),
+                                },
+                            }
+                        )
+                    self.logger.debug(f"Parsed {len(tool_calls)} embedded tool calls")
+                    # Remove tool_calls tag from content since we're returning them separately
+                    final_content = re.sub(r"<tool_calls>.*?</tool_calls>", "", final_content, flags=re.DOTALL).strip()
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    self.logger.warning(f"Failed to parse embedded tool calls: {e}")
+
+        return final_content, tool_calls
 
     def _execute_tool_calls(self, tool_calls: list, tools_used: list[str]) -> list[dict]:
         """Execute tool calls and return formatted result messages.
@@ -490,27 +556,23 @@ class LLMServer:
             message, tool_calls = self._extract_message_and_tool_calls(response_data)
 
             if not tool_calls:
-                # No tool calls - return final response
-                if self.config.BACKEND_TYPE == "lmstudio":
-                    response_data["model"] = self.model_name
-                    response_data["tools_used"] = tools_used
-                    return response_data
-                else:
-                    return {
-                        "id": f"chatcmpl-{int(time.time())}",
-                        "object": "chat.completion",
-                        "created": int(time.time()),
-                        "model": self.model_name,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "message": {"role": "assistant", "content": message.get("content", "")},
-                                "finish_reason": "stop",
-                            }
-                        ],
-                        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                        "tools_used": tools_used,
-                    }
+                # No tool calls - return final response using the cleaned message
+                # (which has thinker model reasoning stripped if applicable)
+                return {
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": message.get("content", "")},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                    "tools_used": tools_used,
+                }
 
             # Execute tool calls and append results
             full_messages.append(message)
@@ -542,9 +604,69 @@ class LLMServer:
         """Stream response directly from backend, converting to OpenAI SSE format.
 
         This performs true streaming - tokens are sent as they're generated by the backend.
+        For thinker models, buffers content and filters out reasoning, only streaming
+        the content between [BEGIN FINAL RESPONSE] and [END FINAL RESPONSE] markers.
         """
         chat_id = f"chatcmpl-{int(time.time())}"
         created = int(time.time())
+
+        # Buffer for thinker model detection and filtering
+        content_buffer = ""
+        in_final_response = False
+        begin_marker = "[BEGIN FINAL RESPONSE]"
+        end_marker = "[END FINAL RESPONSE]"
+
+        def make_chunk(content: str) -> str:
+            """Create an SSE chunk with content."""
+            chunk = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": self.model_name,
+                "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
+            }
+            return f"data: {json.dumps(chunk)}\n\n"
+
+        def process_buffered_content() -> Generator[str, None, None]:
+            """Process buffered content for thinker model markers."""
+            nonlocal content_buffer, in_final_response
+
+            while True:
+                if not in_final_response:
+                    # Look for begin marker
+                    begin_idx = content_buffer.find(begin_marker)
+                    if begin_idx != -1:
+                        # Found begin marker - discard everything before it (reasoning)
+                        content_buffer = content_buffer[begin_idx + len(begin_marker):]
+                        in_final_response = True
+                        # Strip leading whitespace after marker
+                        content_buffer = content_buffer.lstrip()
+                    else:
+                        # No begin marker yet - check if we might be mid-marker
+                        # Keep last len(begin_marker)-1 chars in case marker spans chunks
+                        if len(content_buffer) > len(begin_marker):
+                            # Discard content that can't be start of marker (it's reasoning)
+                            content_buffer = content_buffer[-(len(begin_marker) - 1):]
+                        break
+                else:
+                    # In final response - look for end marker
+                    end_idx = content_buffer.find(end_marker)
+                    if end_idx != -1:
+                        # Found end marker - yield content before it, discard rest
+                        final_content = content_buffer[:end_idx].rstrip()
+                        if final_content:
+                            yield make_chunk(final_content)
+                        content_buffer = ""
+                        in_final_response = False
+                        break
+                    else:
+                        # No end marker yet - yield safe content
+                        # Keep last len(end_marker)-1 chars in case marker spans chunks
+                        safe_len = len(content_buffer) - (len(end_marker) - 1)
+                        if safe_len > 0:
+                            yield make_chunk(content_buffer[:safe_len])
+                            content_buffer = content_buffer[safe_len:]
+                        break
 
         try:
             response = self.call_backend(messages, temperature, stream=True)
@@ -559,14 +681,8 @@ class LLMServer:
                         done = chunk_data.get("done", False)
 
                         if content:
-                            chunk = {
-                                "id": chat_id,
-                                "object": "chat.completion.chunk",
-                                "created": created,
-                                "model": self.model_name,
-                                "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
-                            }
-                            yield f"data: {json.dumps(chunk)}\n\n"
+                            content_buffer += content
+                            yield from process_buffered_content()
 
                         if done:
                             break
@@ -585,14 +701,17 @@ class LLMServer:
                             content = delta.get("content", "")
 
                             if content:
-                                chunk = {
-                                    "id": chat_id,
-                                    "object": "chat.completion.chunk",
-                                    "created": created,
-                                    "model": self.model_name,
-                                    "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
-                                }
-                                yield f"data: {json.dumps(chunk)}\n\n"
+                                content_buffer += content
+                                yield from process_buffered_content()
+
+            # Flush any remaining buffered content
+            if content_buffer and in_final_response:
+                # Remove any trailing end marker if present
+                if content_buffer.endswith(end_marker):
+                    content_buffer = content_buffer[: -len(end_marker)]
+                content_buffer = content_buffer.rstrip()
+                if content_buffer:
+                    yield make_chunk(content_buffer)
 
             # Final chunk with finish_reason
             final_chunk = {
@@ -688,6 +807,41 @@ class LLMServer:
     def health(self):
         """Health check endpoint."""
         return jsonify({"status": "healthy", "backend": self.config.BACKEND_TYPE, "model": self.model_name})
+
+    def config_model(self):
+        """Get or set the backend model.
+
+        GET: Returns current backend model configuration
+        POST: Sets a new backend model (no restart required)
+
+        POST body: {"model": "model-name"}
+        """
+        if request.method == "GET":
+            return jsonify(
+                {
+                    "backend_model": self.config.BACKEND_MODEL,
+                    "backend_type": self.config.BACKEND_TYPE,
+                }
+            )
+
+        # POST - set new model
+        data = request.get_json() or {}
+        new_model = data.get("model")
+
+        if not new_model:
+            return jsonify({"error": "Missing 'model' in request body"}), 400
+
+        old_model = self.config.BACKEND_MODEL
+        self.config.BACKEND_MODEL = new_model
+        self.logger.info(f"Backend model changed: {old_model} -> {new_model}")
+
+        return jsonify(
+            {
+                "status": "ok",
+                "previous_model": old_model,
+                "current_model": new_model,
+            }
+        )
 
     def list_models(self):
         """List available models."""

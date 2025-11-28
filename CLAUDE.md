@@ -374,4 +374,4 @@ When making changes, test in both projects.
 ---
 
 *Last updated: 2025-11-26*
-*Version: 0.6.4*
+*Version: 0.7.0*
