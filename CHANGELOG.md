@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2025-11-28
+
+### Fixed
+- **Tool Choice Required Retry** - Retry once with nudge when `tool_choice=required` is ignored by model
+  - Some models ignore the `tool_choice` parameter and return text instead of tool calls
+  - Now detects when `tool_choice=required` was set but no tool calls were returned
+  - Appends a nudge message ("Please use one of the available tools...") and retries once
+  - Only retries once per request to avoid infinite loops
+  - Logs a warning when the retry occurs for debugging
+
 ## [0.8.1] - 2025-11-28
 
 ### Fixed
