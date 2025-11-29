@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2025-11-28
+
+### Fixed
+- **Explicit tool_choice=none** - Now explicitly sends `tool_choice="none"` in payload for final response generation
+  - Previously, `tool_choice` was only set when tools were present, so it was never sent with empty tools list
+  - Ensures backend receives explicit signal not to attempt tool calls during final synthesis
+
 ## [0.8.0] - 2025-11-28
 
 ### Added
