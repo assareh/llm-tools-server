@@ -179,6 +179,14 @@ server = LLMServer(
 )
 ```
 
+**Per-Request Model Override:**
+Requests can specify a different backend model via the `model` field. If the request's `model` differs from the server's `model_name`, it temporarily overrides `BACKEND_MODEL` for that request:
+```bash
+# Uses qwen2.5:7b for this request only
+curl http://localhost:8000/v1/chat/completions \
+  -d '{"model": "qwen2.5:7b", "messages": [...]}'
+```
+
 ### ServerConfig Base Class
 Extensible configuration loaded from environment:
 ```python
@@ -391,5 +399,5 @@ When making changes, test in both projects.
 
 ---
 
-*Last updated: 2025-11-28*
-*Version: 0.8.0*
+*Last updated: 2025-11-29*
+*Version: 0.8.3*

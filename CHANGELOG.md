@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2025-11-29
+
+### Added
+- **Per-Request Model Override** - Requests can now specify a different backend model via the `model` field
+  - If request `model` differs from server's `model_name`, temporarily overrides `BACKEND_MODEL` for that request
+  - Enables passthrough to LM Studio/Ollama for model selection at request time
+  - Original model is restored after request completes (even on errors)
+  - Model name now logged in `request_started` event for debugging
+
 ## [0.8.2] - 2025-11-28
 
 ### Fixed

@@ -1163,34 +1163,48 @@ class LLMServer:
             temperature = data.get("temperature", self.config.DEFAULT_TEMPERATURE)
             stream = data.get("stream", False)
 
+            # Allow request to override backend model (passthrough to LM Studio/Ollama)
+            request_model = data.get("model")
+            original_model = None
+            if request_model and request_model != self.model_name:
+                # Temporarily override for this request
+                original_model = self.config.BACKEND_MODEL
+                self.config.BACKEND_MODEL = request_model
+
             self._log_event(
                 "info",
                 "request_started",
-                f"Request: {len(messages)} messages, stream={stream}, temp={temperature}",
+                f"Request: {len(messages)} messages, stream={stream}, temp={temperature}, model={self.config.BACKEND_MODEL}",
                 message_count=len(messages),
                 stream=stream,
                 temperature=temperature,
+                backend_model=self.config.BACKEND_MODEL,
             )
 
-            if stream:
-                return Response(
-                    stream_with_context(self.stream_chat_response(messages, temperature)),
-                    mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-                )
-            else:
-                result = self.process_chat_completion(messages, temperature)
-                result["model"] = self.model_name
-                duration = time.time() - start_time
-                tools_used = result.get("tools_used", [])
-                self._log_event(
-                    "info",
-                    "request_completed",
-                    f"Completed in {duration:.2f}s, tools={tools_used}",
-                    duration_s=round(duration, 2),
-                    tools_used=tools_used,
-                )
-                return jsonify(result)
+            try:
+                if stream:
+                    return Response(
+                        stream_with_context(self.stream_chat_response(messages, temperature)),
+                        mimetype="text/event-stream",
+                        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                    )
+                else:
+                    result = self.process_chat_completion(messages, temperature)
+                    result["model"] = self.model_name
+                    duration = time.time() - start_time
+                    tools_used = result.get("tools_used", [])
+                    self._log_event(
+                        "info",
+                        "request_completed",
+                        f"Completed in {duration:.2f}s, tools={tools_used}",
+                        duration_s=round(duration, 2),
+                        tools_used=tools_used,
+                    )
+                    return jsonify(result)
+            finally:
+                # Restore original model if we overrode it
+                if original_model is not None:
+                    self.config.BACKEND_MODEL = original_model
 
         except Exception as e:
             error_details = {
