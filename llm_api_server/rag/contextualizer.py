@@ -170,16 +170,21 @@ class ChunkContextualizer:
         self,
         chunks_to_process: list[tuple[dict[str, Any], str]],
         page_contents: dict[str, str],
+        save_every: int = 50,
     ):
         """Generate contexts for chunks in parallel using ThreadPoolExecutor.
+
+        Progress is saved incrementally to allow resumption if interrupted.
 
         Args:
             chunks_to_process: List of (chunk, cache_key) tuples
             page_contents: Dict mapping URL -> full page text content
+            save_every: Save cache every N completed chunks (default: 50)
         """
         total = len(chunks_to_process)
         completed = 0
         failed = 0
+        last_save = 0
 
         with ThreadPoolExecutor(max_workers=self.config.contextual_max_workers) as executor:
             # Submit all tasks
@@ -214,12 +219,22 @@ class ChunkContextualizer:
                     logger.error(f"[RAG] Context generation failed for chunk {chunk.get('chunk_id')}: {e}")
                     failed += 1
 
+                # Save cache periodically to allow resumption
+                if completed - last_save >= save_every:
+                    self._save_context_cache()
+                    last_save = completed
+                    logger.debug(f"[RAG] Saved context cache checkpoint ({completed} chunks)")
+
                 # Progress update every 10 chunks or at milestones
-                if completed % 10 == 0 or completed == total or completed in [1, 5, 25, 50]:
+                if completed % 10 == 0 or completed == total or completed in [1, 5, 25, 50, 100, 500, 1000]:
                     logger.info(
                         f"[RAG] Context generation: {completed}/{total} ({100*completed/total:.1f}%) "
                         f"- {failed} failed"
                     )
+
+        # Final save
+        if completed > last_save:
+            self._save_context_cache()
 
     def _generate_single_context(self, chunk_content: str, document_content: str) -> str | None:
         """Generate context for a single chunk using the configured backend.

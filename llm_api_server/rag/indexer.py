@@ -614,6 +614,143 @@ class DocSearchIndex:
         logger.info("[RAG] Embedding rebuild complete!")
         logger.info("[RAG] " + "=" * 70)
 
+    def add_contextual_retrieval(self, batch_size: int = 100, save_every: int = 50):
+        """Add contextual retrieval to an existing index.
+
+        This generates LLM context for chunks and rebuilds embeddings.
+        Can be run separately after crawl_and_index() completes.
+        Progress is saved incrementally and can be resumed if interrupted.
+
+        Args:
+            batch_size: Number of chunks to process in parallel
+            save_every: Save context cache every N chunks
+
+        Raises:
+            ValueError: If no chunks found or index not built
+        """
+        logger.info("[RAG] " + "=" * 70)
+        logger.info("[RAG] Adding contextual retrieval to existing index")
+        logger.info("[RAG] " + "=" * 70)
+
+        # Load chunks if not already loaded
+        if not self.chunks:
+            self.chunks = self._load_chunks()
+            self.parent_chunks = self._load_parent_chunks()
+
+        if not self.chunks:
+            raise ValueError("No chunks found. Run crawl_and_index() first.")
+
+        # Load page contents from cache for context generation
+        logger.info("[RAG] Loading cached page contents...")
+        page_contents = self._load_all_page_contents()
+
+        if not page_contents:
+            raise ValueError("No cached pages found. Run crawl_and_index() first.")
+
+        logger.info(f"[RAG] Loaded {len(page_contents)} pages, {len(self.chunks)} chunks")
+
+        # Convert Document objects to dicts for contextualizer
+        chunk_dicts = []
+        for doc in self.chunks:
+            chunk_dict = {
+                "content": doc.page_content,
+                "chunk_id": doc.metadata.get("chunk_id", ""),
+                "url": doc.metadata.get("url", ""),
+                "metadata": doc.metadata,
+            }
+            chunk_dicts.append(chunk_dict)
+
+        # Generate contexts (uses cache, saves incrementally)
+        logger.info(f"[RAG] Generating contexts for {len(chunk_dicts)} chunks...")
+        contextualized = self.contextualizer.contextualize_chunks(chunk_dicts, page_contents)
+
+        # Update chunks with contextualized content
+        for i, ctx_chunk in enumerate(contextualized):
+            if ctx_chunk.get("original_content"):  # Was contextualized
+                self.chunks[i] = Document(
+                    page_content=ctx_chunk["content"],
+                    metadata={
+                        **self.chunks[i].metadata,
+                        "original_content": ctx_chunk.get("original_content", ctx_chunk["content"]),
+                    },
+                )
+
+        # Save updated chunks
+        self._save_chunks()
+
+        # Rebuild embeddings with contextualized content
+        logger.info("[RAG] Rebuilding embeddings with contextualized chunks...")
+        self._initialize_components()
+        self._build_retrievers()
+
+        # Update metadata
+        self._save_metadata(
+            {
+                "version": self.INDEX_VERSION,
+                "last_update": datetime.now().isoformat(),
+                "num_chunks": len(self.chunks),
+                "embedding_model": self.config.embedding_model,
+                "contextual_retrieval": True,
+            }
+        )
+
+        logger.info("[RAG] " + "=" * 70)
+        logger.info("[RAG] Contextual retrieval added successfully!")
+        logger.info("[RAG] " + "=" * 70)
+
+    def start_background_contextualization(self, callback=None):
+        """Start contextual retrieval in a background thread.
+
+        The index remains usable while contexts are being generated.
+        Once complete, embeddings are rebuilt automatically.
+
+        Args:
+            callback: Optional function to call when complete (receives self)
+
+        Returns:
+            threading.Thread: The background thread (already started)
+        """
+        import threading
+
+        def _background_task():
+            try:
+                logger.info("[RAG] Background contextualization started...")
+                self.add_contextual_retrieval()
+                if callback:
+                    callback(self)
+            except Exception as e:
+                logger.error(f"[RAG] Background contextualization failed: {e}")
+
+        thread = threading.Thread(target=_background_task, daemon=True)
+        thread.start()
+        logger.info("[RAG] Background contextualization thread started")
+        return thread
+
+    def _load_all_page_contents(self) -> dict[str, str]:
+        """Load all cached page contents for contextual retrieval.
+
+        Returns:
+            Dict mapping URL -> plain text content
+        """
+        page_contents = {}
+
+        if not self.content_dir.exists():
+            return page_contents
+
+        for cache_file in self.content_dir.glob("*.json"):
+            try:
+                import json
+
+                data = json.loads(cache_file.read_text())
+                url = data.get("url", "")
+                html = data.get("html", "")
+                if url and html:
+                    page_contents[url] = self._extract_page_text(html)
+            except Exception as e:
+                logger.debug(f"[RAG] Failed to load cached page {cache_file}: {e}")
+
+        return page_contents
+
     def search(self, query: str, top_k: int | None = None, return_parent: bool = True) -> list[dict[str, Any]]:
         """Search the document index with hybrid retrieval and re-ranking.
 
