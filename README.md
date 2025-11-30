@@ -191,6 +191,87 @@ server = LLMServer(
   - Requires optional `websearch` dependency: `uv sync --extra websearch`
   - Requires `OLLAMA_API_KEY` to be configured
   - Parameters: `query`, `max_results` (default 10), `site` (optional filter)
+- **`create_doc_search_tool(index, name, description)`** - Search local RAG index
+  - Requires optional `rag` dependency: `uv sync --extra rag`
+  - Parameters: `query`, `top_k` (default 5)
+
+### Sample System Prompt Content
+
+When using built-in tools, include relevant instructions in your system prompt. Here are templates you can customize:
+
+**Basic Tools (datetime, calculate):**
+
+```markdown
+## Available Tools
+
+You have access to the following tools:
+
+- **get_current_datetime**: Get the current date and time. Use this when users ask about the current time, today's date, or time-sensitive questions.
+
+- **calculate**: Evaluate mathematical expressions. Use for any arithmetic calculations. Supports +, -, *, /, // (floor division), % (modulo), ** (power), and parentheses.
+  Examples: "2 + 3 * 4" → 14, "2 ** 8" → 256, "(10 + 5) / 3" → 5
+```
+
+**With Web Search:**
+
+```markdown
+## Available Tools
+
+- **web_search**: Search the web for current information. Use for:
+  - Recent events or news
+  - Current documentation or tutorials
+  - Stack Overflow answers
+  - Any information that may have changed since your training
+
+  Parameters:
+  - query: Search terms
+  - max_results: Number of results (default 10)
+  - site: Optional domain filter (e.g., "stackoverflow.com")
+```
+
+**With Document Search (RAG):**
+
+```markdown
+## Available Tools
+
+- **doc_search**: Search the indexed documentation. ALWAYS use this tool first when users ask questions about [YOUR PRODUCT/DOCS]. This searches locally indexed documentation and returns relevant excerpts with source URLs.
+
+  Parameters:
+  - query: What to search for
+  - top_k: Number of results (default 5)
+
+When answering questions:
+1. First search the documentation using doc_search
+2. If the documentation doesn't have the answer, say so clearly
+3. Always cite your sources with the URLs provided
+```
+
+**Complete Example (All Tools):**
+
+```markdown
+## Available Tools
+
+You have access to these tools to help answer questions:
+
+### get_current_datetime
+Get the current date and time in local timezone.
+
+### calculate
+Safely evaluate mathematical expressions. Supports +, -, *, /, //, %, ** and parentheses.
+
+### doc_search
+Search [YOUR PRODUCT] documentation. Use this FIRST for any questions about [YOUR PRODUCT].
+
+### web_search
+Search the web for general information. Use for topics not covered in the documentation.
+
+## Guidelines
+
+1. For [YOUR PRODUCT] questions: Always search documentation first with doc_search
+2. For calculations: Use the calculate tool instead of computing manually
+3. For current events or external topics: Use web_search
+4. Always cite sources when using search tools
+```
 
 ## RAG Module (Document Search)
 
