@@ -1250,11 +1250,20 @@ class LLMServer:
         threaded = threaded if threaded is not None else self.config.THREADED
 
         threading_mode = "enabled" if threaded else "disabled"
+
+        # Build dynamic banner with centered text
+        title = f"{self.name} - AI Assistant with Tools"
+        padding = 2  # spaces on each side
+        inner_width = len(title) + (padding * 2)
+        top_border = "╭" + "─" * inner_width + "╮"
+        middle_line = "│" + " " * padding + title + " " * padding + "│"
+        bottom_border = "╰" + "─" * inner_width + "╯"
+
         print(
             f"""
-╭────────────────────────────────────╮
-│  {self.name} - AI Assistant with Tools   │
-╰────────────────────────────────────╯
+{top_border}
+{middle_line}
+{bottom_border}
 
 Backend: {self.config.BACKEND_TYPE}
 Model: {self.config.BACKEND_MODEL}
