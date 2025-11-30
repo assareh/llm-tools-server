@@ -377,13 +377,22 @@ class LLMServer:
 
         return not_found_msg
 
-    def call_backend(self, messages: list[dict], temperature: float, stream: bool = False):
-        """Call the configured backend."""
+    def call_backend(
+        self, messages: list[dict], temperature: float, stream: bool = False, tool_choice: str | None = None
+    ):
+        """Call the configured backend.
+
+        Args:
+            messages: List of chat messages
+            temperature: Sampling temperature
+            stream: Whether to stream the response
+            tool_choice: Tool calling mode - "required", "auto", or "none"
+        """
         start_time = time.time()
         if self.config.BACKEND_TYPE == "ollama":
-            result = call_ollama(messages, self.tools, self.config, temperature, stream)
+            result = call_ollama(messages, self.tools, self.config, temperature, stream, tool_choice)
         else:  # lmstudio
-            result = call_lmstudio(messages, self.tools, self.config, temperature, stream)
+            result = call_lmstudio(messages, self.tools, self.config, temperature, stream, tool_choice)
         if not stream:
             duration = time.time() - start_time
             self._log_event(
@@ -541,6 +550,9 @@ class LLMServer:
         if max_iterations is None:
             max_iterations = self.config.MAX_TOOL_ITERATIONS
 
+        # Reset retry flag for tool_choice=required nudge (only retry once per request)
+        self._tool_required_retry_done = False
+
         # Add system prompt
         system_prompt = self.get_system_prompt()
         full_messages = [{"role": "system", "content": system_prompt}] + messages
@@ -565,17 +577,23 @@ class LLMServer:
                 )
                 break
             iteration += 1
+            # Determine tool_choice based on iteration:
+            # - First iteration: configurable (default "auto")
+            # - Subsequent iterations: always "auto" to let model decide
+            tool_choice = self.config.FIRST_ITERATION_TOOL_CHOICE if iteration == 1 else "auto"
+
             self._log_event(
                 "debug",
                 "tool_loop_iteration",
-                f"[TOOL LOOP] Iteration {iteration}/{max_iterations}",
+                f"[TOOL LOOP] Iteration {iteration}/{max_iterations} (tool_choice={tool_choice})",
                 iteration=iteration,
                 max_iterations=max_iterations,
+                tool_choice=tool_choice,
             )
 
             # Call the backend with timeout handling
             try:
-                response = self.call_backend(full_messages, temperature, stream=False)
+                response = self.call_backend(full_messages, temperature, stream=False, tool_choice=tool_choice)
                 response_data = response.json()
             except requests.Timeout:
                 backend_endpoint = (
@@ -643,6 +661,23 @@ class LLMServer:
 
             # Extract message and tool calls from response
             message, tool_calls = self._extract_message_and_tool_calls(response_data)
+
+            # Retry once if tool_choice was "required" but model didn't call any tools
+            if not tool_calls and tool_choice == "required" and not getattr(self, "_tool_required_retry_done", False):
+                self._tool_required_retry_done = True
+                self._log_event(
+                    "warning",
+                    "tool_choice_required_ignored",
+                    "[TOOL LOOP] tool_choice=required was ignored by model, retrying with nudge",
+                    iteration=iteration,
+                )
+                # Add a nudge message to encourage tool use
+                nudge_message = {
+                    "role": "user",
+                    "content": "Please use one of the available tools to help answer this question.",
+                }
+                full_messages.append(nudge_message)
+                continue  # Retry this iteration
 
             if not tool_calls:
                 # No tool calls - return final response using the cleaned message
@@ -719,7 +754,7 @@ class LLMServer:
         self._log_event(
             "info",
             "tool_loop_final_response",
-            "[TOOL LOOP] Generating final response without tools",
+            "[TOOL LOOP] Generating final response without tools (tool_choice=none)",
         )
 
         # Log full message history if debug tools is enabled
@@ -732,7 +767,7 @@ class LLMServer:
                 messages=messages,
             )
 
-        # Call backend WITHOUT tools to force a text response
+        # Call backend WITHOUT tools and with tool_choice="none" to force a text response
         try:
             if self.config.BACKEND_TYPE == "ollama":
                 from .backends import call_ollama
@@ -743,6 +778,7 @@ class LLMServer:
                     self.config,
                     temperature,
                     stream=False,
+                    tool_choice="none",  # Explicitly disable tool calls
                 )
             else:  # lmstudio
                 from .backends import call_lmstudio
@@ -753,6 +789,7 @@ class LLMServer:
                     self.config,
                     temperature,
                     stream=False,
+                    tool_choice="none",  # Explicitly disable tool calls
                 )
             response_data = response.json()
         except (requests.Timeout, requests.ConnectionError) as e:
@@ -1126,34 +1163,48 @@ class LLMServer:
             temperature = data.get("temperature", self.config.DEFAULT_TEMPERATURE)
             stream = data.get("stream", False)
 
+            # Allow request to override backend model (passthrough to LM Studio/Ollama)
+            request_model = data.get("model")
+            original_model = None
+            if request_model and request_model != self.model_name:
+                # Temporarily override for this request
+                original_model = self.config.BACKEND_MODEL
+                self.config.BACKEND_MODEL = request_model
+
             self._log_event(
                 "info",
                 "request_started",
-                f"Request: {len(messages)} messages, stream={stream}, temp={temperature}",
+                f"Request: {len(messages)} messages, stream={stream}, temp={temperature}, model={self.config.BACKEND_MODEL}",
                 message_count=len(messages),
                 stream=stream,
                 temperature=temperature,
+                backend_model=self.config.BACKEND_MODEL,
             )
 
-            if stream:
-                return Response(
-                    stream_with_context(self.stream_chat_response(messages, temperature)),
-                    mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-                )
-            else:
-                result = self.process_chat_completion(messages, temperature)
-                result["model"] = self.model_name
-                duration = time.time() - start_time
-                tools_used = result.get("tools_used", [])
-                self._log_event(
-                    "info",
-                    "request_completed",
-                    f"Completed in {duration:.2f}s, tools={tools_used}",
-                    duration_s=round(duration, 2),
-                    tools_used=tools_used,
-                )
-                return jsonify(result)
+            try:
+                if stream:
+                    return Response(
+                        stream_with_context(self.stream_chat_response(messages, temperature)),
+                        mimetype="text/event-stream",
+                        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                    )
+                else:
+                    result = self.process_chat_completion(messages, temperature)
+                    result["model"] = self.model_name
+                    duration = time.time() - start_time
+                    tools_used = result.get("tools_used", [])
+                    self._log_event(
+                        "info",
+                        "request_completed",
+                        f"Completed in {duration:.2f}s, tools={tools_used}",
+                        duration_s=round(duration, 2),
+                        tools_used=tools_used,
+                    )
+                    return jsonify(result)
+            finally:
+                # Restore original model if we overrode it
+                if original_model is not None:
+                    self.config.BACKEND_MODEL = original_model
 
         except Exception as e:
             error_details = {
@@ -1199,11 +1250,20 @@ class LLMServer:
         threaded = threaded if threaded is not None else self.config.THREADED
 
         threading_mode = "enabled" if threaded else "disabled"
+
+        # Build dynamic banner with centered text
+        title = f"{self.name} - AI Assistant with Tools"
+        padding = 2  # spaces on each side
+        inner_width = len(title) + (padding * 2)
+        top_border = "╭" + "─" * inner_width + "╮"
+        middle_line = "│" + " " * padding + title + " " * padding + "│"
+        bottom_border = "╰" + "─" * inner_width + "╯"
+
         print(
             f"""
-╭────────────────────────────────────╮
-│  {self.name} - AI Assistant with Tools   │
-╰────────────────────────────────────╯
+{top_border}
+{middle_line}
+{bottom_border}
 
 Backend: {self.config.BACKEND_TYPE}
 Model: {self.config.BACKEND_MODEL}

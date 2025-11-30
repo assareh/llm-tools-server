@@ -192,7 +192,7 @@ class TestLLMServer:
 
         responses = iter([DummyResponse(first_response), DummyResponse(final_response)])
 
-        def call_backend_side_effect(messages, temperature, stream=False):
+        def call_backend_side_effect(messages, temperature, stream=False, tool_choice=None):
             return next(responses)
 
         monkeypatch.setattr(server, "call_backend", call_backend_side_effect)

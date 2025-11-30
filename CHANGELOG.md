@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2025-11-29
+
+### Added
+- **Per-Request Model Override** - Requests can now specify a different backend model via the `model` field
+  - If request `model` differs from server's `model_name`, temporarily overrides `BACKEND_MODEL` for that request
+  - Enables passthrough to LM Studio/Ollama for model selection at request time
+  - Original model is restored after request completes (even on errors)
+  - Model name now logged in `request_started` event for debugging
+
+## [0.8.2] - 2025-11-28
+
+### Fixed
+- **Tool Choice Required Retry** - Retry once with nudge when `tool_choice=required` is ignored by model
+  - Some models ignore the `tool_choice` parameter and return text instead of tool calls
+  - Now detects when `tool_choice=required` was set but no tool calls were returned
+  - Appends a nudge message ("Please use one of the available tools...") and retries once
+  - Only retries once per request to avoid infinite loops
+  - Logs a warning when the retry occurs for debugging
+
+## [0.8.1] - 2025-11-28
+
+### Fixed
+- **Explicit tool_choice=none** - Now explicitly sends `tool_choice="none"` in payload for final response generation
+  - Previously, `tool_choice` was only set when tools were present, so it was never sent with empty tools list
+  - Ensures backend receives explicit signal not to attempt tool calls during final synthesis
+
+## [0.8.0] - 2025-11-28
+
+### Added
+- **Tool Choice Support** - Control how models use tools via `tool_choice` parameter
+  - Supports `"auto"` (model decides), `"required"` (force tool use), and `"none"` (disable tools)
+  - New `FIRST_ITERATION_TOOL_CHOICE` config option (default: `"auto"`)
+  - Environment variable: `FIRST_ITERATION_TOOL_CHOICE=required` to force tools on first call
+  - Tool choice passed to backend and logged for debugging
+
+### Changed
+- **Ollama Backend** - Switched from native `/api/chat` to OpenAI-compatible `/v1/chat/completions` endpoint
+  - Enables full `tool_choice` support (native API didn't support this parameter)
+  - Response format now matches LM Studio (standard OpenAI format)
+  - Both backends now use nearly identical code paths
+- Tools are only sent to backend when `tool_choice != "none"` and tools exist
+- Final response generation explicitly uses `tool_choice="none"` to prevent tool calls
+
 ## [0.7.3] - 2025-11-28
 
 ### Added

@@ -78,27 +78,46 @@ def call_ollama(
     config: "ServerConfig",
     temperature: float = 0.0,
     stream: bool = False,
+    tool_choice: str | None = None,
 ):
-    """Call Ollama with tool support."""
-    endpoint = f"{config.OLLAMA_ENDPOINT}/api/chat"
+    """Call Ollama via OpenAI-compatible endpoint with tool support.
 
-    # Convert tools to Ollama format
-    ollama_tools = []
+    Args:
+        messages: List of chat messages
+        tools: List of LangChain tools to make available
+        config: Server configuration
+        temperature: Sampling temperature
+        stream: Whether to stream the response
+        tool_choice: Tool calling mode - "required", "auto", or "none"
+    """
+    endpoint = f"{config.OLLAMA_ENDPOINT}/v1/chat/completions"
+
+    # Convert tools to OpenAI format
+    openai_tools = []
     for tool in tools:
         schema = get_tool_schema(tool)
         tool_def = {
             "type": "function",
             "function": {"name": tool.name, "description": tool.description, "parameters": schema},
         }
-        ollama_tools.append(tool_def)
+        openai_tools.append(tool_def)
 
     payload = {
         "model": config.BACKEND_MODEL,
         "messages": messages,
-        "tools": ollama_tools,
+        "temperature": temperature,
         "stream": stream,
-        "options": {"temperature": temperature},
     }
+
+    # Handle tools and tool_choice
+    if tool_choice == "none":
+        # Explicitly send tool_choice="none" to prevent tool calls (e.g., for final response generation)
+        payload["tool_choice"] = "none"
+    elif openai_tools:
+        # Include tools and optionally tool_choice when tools are available
+        payload["tools"] = openai_tools
+        if tool_choice:
+            payload["tool_choice"] = tool_choice
 
     # Set timeout as tuple (connect_timeout, read_timeout)
     timeout = (config.BACKEND_CONNECT_TIMEOUT, config.BACKEND_READ_TIMEOUT)
@@ -119,8 +138,18 @@ def call_lmstudio(
     config: "ServerConfig",
     temperature: float = 0.0,
     stream: bool = False,
+    tool_choice: str | None = None,
 ):
-    """Call LM Studio with tool support."""
+    """Call LM Studio with tool support.
+
+    Args:
+        messages: List of chat messages
+        tools: List of LangChain tools to make available
+        config: Server configuration
+        temperature: Sampling temperature
+        stream: Whether to stream the response
+        tool_choice: Tool calling mode - "required", "auto", or "none"
+    """
     endpoint = f"{config.LMSTUDIO_ENDPOINT}/chat/completions"
 
     # Convert tools to OpenAI format
@@ -136,10 +165,19 @@ def call_lmstudio(
     payload = {
         "model": config.BACKEND_MODEL,
         "messages": messages,
-        "tools": openai_tools,
         "temperature": temperature,
         "stream": stream,
     }
+
+    # Handle tools and tool_choice
+    if tool_choice == "none":
+        # Explicitly send tool_choice="none" to prevent tool calls (e.g., for final response generation)
+        payload["tool_choice"] = "none"
+    elif openai_tools:
+        # Include tools and optionally tool_choice when tools are available
+        payload["tools"] = openai_tools
+        if tool_choice:
+            payload["tool_choice"] = tool_choice
 
     # Set timeout as tuple (connect_timeout, read_timeout)
     timeout = (config.BACKEND_CONNECT_TIMEOUT, config.BACKEND_READ_TIMEOUT)

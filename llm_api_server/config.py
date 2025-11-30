@@ -43,6 +43,7 @@ class ServerConfig:
     THREADED: bool = True  # Enable threaded mode for concurrent requests
     MAX_TOOL_ITERATIONS: int = 5  # Maximum tool calling loop iterations per request
     TOOL_LOOP_TIMEOUT: int = 120  # Maximum seconds for entire tool loop (0 = no timeout)
+    FIRST_ITERATION_TOOL_CHOICE: Literal["auto", "required"] = "auto"  # Tool choice for first iteration
 
     # Model name advertised via API
     MODEL_NAME: str = "llm-server/default"
@@ -144,5 +145,9 @@ class ServerConfig:
         config.RATE_LIMIT_STORAGE_URI = get_env("RATE_LIMIT_STORAGE_URI", cls.RATE_LIMIT_STORAGE_URI)
         config.MAX_TOOL_ITERATIONS = int(get_env("MAX_TOOL_ITERATIONS", str(cls.MAX_TOOL_ITERATIONS)))
         config.TOOL_LOOP_TIMEOUT = int(get_env("TOOL_LOOP_TIMEOUT", str(cls.TOOL_LOOP_TIMEOUT)))
+        first_tool_choice = get_env("FIRST_ITERATION_TOOL_CHOICE", cls.FIRST_ITERATION_TOOL_CHOICE)
+        if first_tool_choice not in ("auto", "required"):
+            first_tool_choice = "auto"
+        config.FIRST_ITERATION_TOOL_CHOICE = first_tool_choice
 
         return config

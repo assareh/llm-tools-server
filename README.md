@@ -446,6 +446,17 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
+**Per-Request Model Override:** You can specify a different backend model per request by setting the `model` field to a model name different from the server's configured `model_name`. This passes through to LM Studio/Ollama, allowing dynamic model selection:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen2.5:7b",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
 ## Evaluation Framework
 
 LLM API Server includes a comprehensive evaluation framework for testing your LLM applications.
