@@ -65,6 +65,9 @@ class ChunkContextualizer:
         self._pause_event = threading.Event()
         self._pause_event.set()  # Start unpaused (set = running, clear = paused)
 
+        # Stop control for graceful shutdown
+        self._stop_event = threading.Event()
+
     def _resolve_backend_settings(self):
         """Resolve backend type, endpoint, and model from config hierarchy."""
         # Warn if contextual retrieval is enabled but no server_config provided
@@ -275,10 +278,19 @@ class ChunkContextualizer:
         Returns:
             Generated context string, or None if failed
         """
+        # Check if we should stop
+        if self._stop_event.is_set():
+            return None
+
         # Wait if paused (yields to user requests)
-        # Uses timeout to periodically check - blocks until resumed
+        # Uses timeout to periodically check - blocks until resumed or stopped
         while not self._pause_event.wait(timeout=0.5):
-            pass  # Keep waiting while paused
+            if self._stop_event.is_set():
+                return None
+
+        # Check again after waking up
+        if self._stop_event.is_set():
+            return None
 
         # Build prompt from template
         prompt = self.config.contextual_prompt.format(
@@ -384,3 +396,16 @@ class ChunkContextualizer:
     def is_paused(self) -> bool:
         """Check if context generation is currently paused."""
         return not self._pause_event.is_set()
+
+    def stop(self):
+        """Stop background context generation for graceful shutdown.
+
+        Sets the stop flag and wakes up any paused workers so they can exit.
+        """
+        self._stop_event.set()
+        self._pause_event.set()  # Wake up any paused workers
+        logger.info("[RAG] Contextual retrieval stop requested")
+
+    def is_stopped(self) -> bool:
+        """Check if stop has been requested."""
+        return self._stop_event.is_set()

@@ -727,19 +727,41 @@ class DocSearchIndex:
                 print("[RAG] Background contextualization started...", file=sys.stderr)
                 logger.info("[RAG] Background contextualization started...")
                 self.add_contextual_retrieval()
-                print("[RAG] Background contextualization complete!", file=sys.stderr)
-                logger.info("[RAG] Background contextualization complete!")
-                if callback:
-                    callback(self)
+                if not self.contextualizer.is_stopped():
+                    print("[RAG] Background contextualization complete!", file=sys.stderr)
+                    logger.info("[RAG] Background contextualization complete!")
+                    if callback:
+                        callback(self)
+                else:
+                    print("[RAG] Background contextualization stopped", file=sys.stderr)
+                    logger.info("[RAG] Background contextualization stopped")
             except Exception as e:
-                print(f"[RAG] Background contextualization failed: {e}", file=sys.stderr)
-                logger.error(f"[RAG] Background contextualization failed: {e}")
+                if not self.contextualizer.is_stopped():
+                    print(f"[RAG] Background contextualization failed: {e}", file=sys.stderr)
+                    logger.error(f"[RAG] Background contextualization failed: {e}")
 
-        thread = threading.Thread(target=_background_task, daemon=True)
-        thread.start()
+        self._background_thread = threading.Thread(target=_background_task, daemon=True)
+        self._background_thread.start()
         print("[RAG] Background contextualization thread started", file=sys.stderr)
         logger.info("[RAG] Background contextualization thread started")
-        return thread
+        return self._background_thread
+
+    def stop_background_contextualization(self, timeout: float = 5.0):
+        """Stop background context generation for graceful shutdown.
+
+        Args:
+            timeout: Maximum seconds to wait for thread to finish (default: 5.0)
+        """
+        self.contextualizer.stop()
+        thread = getattr(self, "_background_thread", None)
+        if thread is not None and thread.is_alive():
+            logger.info(f"[RAG] Waiting up to {timeout}s for background thread to finish...")
+            thread.join(timeout=timeout)
+            if thread.is_alive():
+                logger.warning("[RAG] Background thread did not finish in time")
+            else:
+                logger.info("[RAG] Background thread finished")
+        print("[RAG] Background contextualization stopped", file=sys.stderr)
 
     def _load_all_page_contents(self) -> dict[str, str]:
         """Load all cached page contents for contextual retrieval.
