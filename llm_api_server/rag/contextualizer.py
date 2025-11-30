@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -60,7 +61,21 @@ class ChunkContextualizer:
 
     def _resolve_backend_settings(self):
         """Resolve backend type, endpoint, and model from config hierarchy."""
-        # Backend type: RAGConfig override > ServerConfig > error
+        # Warn if contextual retrieval is enabled but no server_config provided
+        missing_backend_config = not (self.config.contextual_backend_type and self.config.contextual_backend_endpoint)
+        if self.config.contextual_retrieval_enabled and not self.server_config and missing_backend_config:
+            logger.warning(
+                "[RAG] Contextual retrieval enabled but no server_config provided. "
+                "Pass server_config to DocSearchIndex() or set contextual_backend_type/endpoint in RAGConfig. "
+                "Falling back to Ollama at localhost:11434."
+            )
+            print(
+                "[RAG] WARNING: Contextual retrieval enabled but no server_config provided. "
+                "Falling back to Ollama at localhost:11434.",
+                file=sys.stderr,
+            )
+
+        # Backend type: RAGConfig override > ServerConfig > fallback
         if self.config.contextual_backend_type:
             self.backend_type = self.config.contextual_backend_type
         elif self.server_config:
@@ -95,6 +110,11 @@ class ChunkContextualizer:
             logger.info(
                 f"[RAG] Contextual retrieval using {self.backend_type} backend "
                 f"at {self.backend_endpoint} with model {self.model}"
+            )
+            print(
+                f"[RAG] Contextual retrieval using {self.backend_type} backend "
+                f"at {self.backend_endpoint} with model {self.model}",
+                file=sys.stderr,
             )
 
     def contextualize_chunks(
@@ -225,12 +245,14 @@ class ChunkContextualizer:
                     last_save = completed
                     logger.debug(f"[RAG] Saved context cache checkpoint ({completed} chunks)")
 
-                # Progress update every 10 chunks or at milestones
-                if completed % 10 == 0 or completed == total or completed in [1, 5, 25, 50, 100, 500, 1000]:
-                    logger.info(
+                # Progress update every 100 chunks or at milestones
+                if completed % 100 == 0 or completed == total or completed in [1, 10, 50]:
+                    progress_msg = (
                         f"[RAG] Context generation: {completed}/{total} ({100*completed/total:.1f}%) "
                         f"- {failed} failed"
                     )
+                    print(progress_msg, file=sys.stderr)
+                    logger.info(progress_msg)
 
         # Final save
         if completed > last_save:

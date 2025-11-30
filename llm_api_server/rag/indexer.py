@@ -721,15 +721,20 @@ class DocSearchIndex:
 
         def _background_task():
             try:
+                print("[RAG] Background contextualization started...", file=sys.stderr)
                 logger.info("[RAG] Background contextualization started...")
                 self.add_contextual_retrieval()
+                print("[RAG] Background contextualization complete!", file=sys.stderr)
+                logger.info("[RAG] Background contextualization complete!")
                 if callback:
                     callback(self)
             except Exception as e:
+                print(f"[RAG] Background contextualization failed: {e}", file=sys.stderr)
                 logger.error(f"[RAG] Background contextualization failed: {e}")
 
         thread = threading.Thread(target=_background_task, daemon=True)
         thread.start()
+        print("[RAG] Background contextualization thread started", file=sys.stderr)
         logger.info("[RAG] Background contextualization thread started")
         return thread
 
