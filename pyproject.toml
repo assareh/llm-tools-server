@@ -45,6 +45,7 @@ rag = [
     "tiktoken>=0.5.0",
     "rank-bm25>=0.2.2",
     "readability-lxml>=0.8.1",
+    "tqdm>=4.65.0",
 ]
 dev = ["pytest", "pytest-mock", "black", "ruff", "mypy"]
 

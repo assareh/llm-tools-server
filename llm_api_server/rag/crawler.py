@@ -8,6 +8,7 @@ Supports three crawling modes:
 
 import logging
 import re
+import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -17,6 +18,7 @@ from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,7 @@ class DocumentCrawler:
         url_include_patterns: list[str] | None = None,
         url_exclude_patterns: list[str] | None = None,
         user_agent: str = DEFAULT_USER_AGENT,
+        show_progress: bool = True,
     ):
         """Initialize the document crawler.
 
@@ -57,6 +60,7 @@ class DocumentCrawler:
             url_include_patterns: Regex patterns - only crawl matching URLs
             url_exclude_patterns: Regex patterns - skip matching URLs
             user_agent: User agent string for requests
+            show_progress: Show progress bars during crawling (default: True)
         """
         self.base_url = base_url.rstrip("/")
         self.cache_dir = cache_dir
@@ -68,6 +72,7 @@ class DocumentCrawler:
         self.max_pages = max_pages
         self.request_timeout = request_timeout
         self.user_agent = user_agent
+        self.show_progress = show_progress
 
         # Compile URL patterns
         self.url_include_patterns = [re.compile(p) for p in (url_include_patterns or [])]
@@ -258,19 +263,29 @@ class DocumentCrawler:
                 sub_sitemaps.sort(key=lambda x: x.get("lastmod") or "", reverse=True)
                 logger.info("[CRAWLER] Processing sub-sitemaps (newest first)...")
 
-                # Parse each sub-sitemap in order
-                for idx, sitemap_info in enumerate(sub_sitemaps, 1):
+                # Parse each sub-sitemap in order with progress bar
+                pbar = tqdm(
+                    sub_sitemaps,
+                    desc="Parsing sitemaps",
+                    unit="sitemap",
+                    disable=not self.show_progress,
+                    file=sys.stderr,
+                )
+                for sitemap_info in pbar:
                     try:
-                        logger.info(f"[CRAWLER] Parsing sub-sitemap {idx}/{len(sub_sitemaps)}: {sitemap_info['url']}")
+                        # Update progress bar description with current sitemap
+                        sitemap_name = sitemap_info["url"].split("/")[-1]
+                        pbar.set_postfix_str(f"{sitemap_name[:30]}", refresh=True)
+
                         response = requests.get(
                             sitemap_info["url"], headers={"User-Agent": self.user_agent}, timeout=self.request_timeout
                         )
                         response.raise_for_status()
                         sub_urls = self._parse_sitemap_xml(response.content)
                         urls.extend(sub_urls)
-                        logger.info(
-                            f"[CRAWLER] Sub-sitemap {idx}/{len(sub_sitemaps)}: found {len(sub_urls)} URLs (total: {len(urls)})"
-                        )
+
+                        # Update progress bar with URL count
+                        pbar.set_postfix_str(f"{len(urls)} URLs found", refresh=True)
                         time.sleep(self.rate_limit_delay)
                     except Exception as e:
                         logger.warning(f"[CRAWLER] Failed to parse sub-sitemap {sitemap_info['url']}: {e}")
@@ -321,6 +336,15 @@ class DocumentCrawler:
 
         logger.info(f"[CRAWLER] Starting recursive crawl from {self.base_url} (max depth: {self.max_crawl_depth})...")
 
+        # Create progress bar for recursive crawl
+        pbar = tqdm(
+            desc="Discovering URLs",
+            unit="page",
+            disable=not self.show_progress,
+            file=sys.stderr,
+            total=self.max_pages,  # If max_pages is set, use it as total
+        )
+
         while to_visit and (not self.max_pages or len(urls) < self.max_pages):
             current_url, depth = to_visit.pop(0)
 
@@ -339,10 +363,12 @@ class DocumentCrawler:
             visited.add(current_url)
             urls.append({"url": current_url})
 
+            # Update progress bar
+            pbar.update(1)
+            pbar.set_postfix_str(f"depth={depth}, queue={len(to_visit)}", refresh=True)
+
             # Fetch page and extract links
             try:
-                max_display = f"{self.max_pages}" if self.max_pages else "∞"
-                logger.info(f"[CRAWLER] Crawling [{len(urls)}/{max_display}] depth {depth}: {current_url}")
                 time.sleep(self.rate_limit_delay)
 
                 response = requests.get(
@@ -388,6 +414,7 @@ class DocumentCrawler:
                 logger.warning(f"[CRAWLER] Failed to crawl {current_url}: {e}")
                 continue
 
+        pbar.close()
         return urls
 
     def fetch_page(self, url: str) -> tuple[str, str] | None:

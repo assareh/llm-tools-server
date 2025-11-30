@@ -61,6 +61,10 @@ class RAGConfig:
         page_cache_ttl_hours: TTL for cached pages without lastmod (default: 168 = 7 days, 0 = never expire).
             Pages with lastmod from sitemap are invalidated when lastmod changes.
             Pages without lastmod are invalidated after this TTL expires.
+
+        # Progress display settings
+        show_progress: Show progress bars during crawling/indexing (default: True).
+            Disable for non-interactive environments or quiet operation.
     """
 
     # Core settings
@@ -126,6 +130,9 @@ Please give a short succinct context (2-3 sentences) to situate this chunk withi
     # Index settings
     update_check_interval_hours: int = 168  # 7 days
     page_cache_ttl_hours: int = 168  # 7 days - TTL for cached pages without lastmod (0 = never expire)
+
+    # Progress display settings
+    show_progress: bool = True  # Show progress bars during crawling/indexing
 
     def __post_init__(self):
         """Convert cache_dir to Path and validate weights."""

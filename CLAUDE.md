@@ -353,6 +353,7 @@ config = RAGConfig(
     # are weighted ~2.3x more than BM25 ranks in the fusion formula.
     hybrid_bm25_weight=0.3,
     hybrid_semantic_weight=0.7,
+    show_progress=True,  # Show progress bars during crawling/indexing
 )
 
 index = DocSearchIndex(config)
@@ -360,6 +361,15 @@ index.crawl_and_index()  # Normal update
 index.crawl_and_index(force_refresh=True)  # Refetch all cached pages
 results = index.search("query", top_k=5)
 ```
+
+**Progress Tracking:**
+The RAG module shows progress bars during crawling and indexing:
+- **Sitemap parsing**: Shows progress through sub-sitemaps with URL count
+- **Recursive crawl**: Shows pages discovered with depth and queue size
+- **Page fetching**: Shows pages fetched with cache hits and failures, includes ETA
+- **Chunking**: Shows pages chunked with child/parent chunk counts
+
+Set `show_progress=False` to disable progress bars (e.g., for non-interactive environments).
 
 **Cache Invalidation:**
 - Pages with sitemap `lastmod`: invalidated when date changes
@@ -380,6 +390,7 @@ This module was generalized from Ivan's HashiCorp doc search implementation:
 - beautifulsoup4 (HTML parsing)
 - tiktoken (token counting)
 - rank-bm25 (keyword search)
+- tqdm (progress bars)
 
 ## Consuming Projects
 

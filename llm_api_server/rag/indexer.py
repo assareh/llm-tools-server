@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -107,6 +108,7 @@ class DocSearchIndex:
             request_timeout=config.request_timeout,
             url_include_patterns=config.url_include_patterns,
             url_exclude_patterns=config.url_exclude_patterns,
+            show_progress=config.show_progress,
         )
 
         # Contextualizer for Anthropic's contextual retrieval approach
@@ -688,6 +690,7 @@ class DocSearchIndex:
         pages = []
         total = len(url_list)
         cache_hits = 0
+        failed_count = 0
 
         with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
             # Submit all fetch tasks (with cache check)
@@ -695,8 +698,18 @@ class DocSearchIndex:
                 executor.submit(self._fetch_page_with_cache, url_info, force_refresh): url_info for url_info in url_list
             }
 
+            # Create progress bar for page fetching
+            pbar = tqdm(
+                as_completed(future_to_url),
+                total=total,
+                desc="Fetching pages",
+                unit="page",
+                disable=not self.config.show_progress,
+                file=sys.stderr,
+            )
+
             # Process completed tasks
-            for idx, future in enumerate(as_completed(future_to_url), 1):
+            for future in pbar:
                 url_info = future_to_url[future]
                 url = url_info["url"]
                 try:
@@ -708,23 +721,28 @@ class DocSearchIndex:
 
                         # Success - clear any previous failures
                         failed_urls.pop(url, None)
-
-                        # More frequent progress updates (every 5 pages or at key milestones)
-                        if idx % 5 == 0 or idx == total or idx in [1, 10, 25, 50]:
-                            logger.info(
-                                f"[RAG] Fetching pages: {idx}/{total} ({100*idx/total:.1f}%) - {cache_hits} from cache"
-                            )
                     else:
                         # Fetch returned None (failure)
-                        logger.warning(f"[RAG] Failed to fetch page: {url}")
+                        failed_count += 1
+                        logger.debug(f"[RAG] Failed to fetch page: {url}")
                         self._track_url_failure(url, failed_urls, "Failed to fetch page")
 
                 except Exception as e:
-                    logger.error(f"[RAG] Failed to fetch {url}: {e}")
+                    failed_count += 1
+                    logger.debug(f"[RAG] Failed to fetch {url}: {e}")
                     self._track_url_failure(url, failed_urls, str(e))
 
+                # Update progress bar postfix with stats
+                pbar.set_postfix_str(
+                    f"cached={cache_hits}, failed={failed_count}",
+                    refresh=True,
+                )
+
+        # Log summary
         if cache_hits > 0 and len(pages) > 0:
-            logger.info(f"[RAG] Cache hits: {cache_hits}/{len(pages)} ({100*cache_hits/len(pages):.1f}%)")
+            logger.info(f"[RAG] Fetch complete: {len(pages)} pages ({cache_hits} from cache, {failed_count} failed)")
+        elif failed_count > 0:
+            logger.info(f"[RAG] Fetch complete: {len(pages)} pages ({failed_count} failed)")
 
         return pages, failed_urls
 
@@ -984,9 +1002,23 @@ class DocSearchIndex:
         # Extract page text content for contextual retrieval
         page_contents: dict[str, str] = {}
 
-        for idx, page in enumerate(deduplicated_pages, 1):
+        # Track chunks created during this call (for progress reporting)
+        chunks_before = len(self.chunks)
+        parents_before = len(self.parent_chunks)
+
+        # Create progress bar for chunking
+        pbar = tqdm(
+            deduplicated_pages,
+            desc="Chunking pages",
+            unit="page",
+            disable=not self.config.show_progress,
+            file=sys.stderr,
+        )
+
+        for page in pbar:
             # Extract plain text for contextual retrieval
             page_contents[page["url"]] = self._extract_page_text(page["html"])
+
             try:
                 # Use semantic chunking
                 result = semantic_chunk_html(
@@ -1064,13 +1096,10 @@ class DocSearchIndex:
                     )
                     self.chunks.append(doc)
 
-                # More frequent progress updates (every 10 pages or at key milestones)
-                total_pages = len(deduplicated_pages)
-                if idx % 10 == 0 or idx == total_pages or idx in [1, 5, 25, 50]:
-                    logger.info(
-                        f"[RAG] Chunking: {idx}/{total_pages} pages ({100*idx/total_pages:.1f}%) - "
-                        f"{len(self.chunks)} child chunks, {len(self.parent_chunks)} parent chunks"
-                    )
+                # Update progress bar with chunk counts
+                new_chunks = len(self.chunks) - chunks_before
+                new_parents = len(self.parent_chunks) - parents_before
+                pbar.set_postfix_str(f"chunks={new_chunks}, parents={new_parents}", refresh=True)
 
             except Exception as e:
                 logger.error(f"[RAG] Failed to chunk {page['url']}: {e}")

@@ -2591,6 +2591,7 @@ rag = [
     { name = "readability-lxml" },
     { name = "sentence-transformers" },
     { name = "tiktoken" },
+    { name = "tqdm" },
 ]
 webui = [
     { name = "open-webui" },
@@ -2620,6 +2621,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "sentence-transformers", marker = "extra == 'rag'", specifier = ">=2.3.0" },
     { name = "tiktoken", marker = "extra == 'rag'", specifier = ">=0.5.0" },
+    { name = "tqdm", marker = "extra == 'rag'", specifier = ">=4.65.0" },
 ]
 provides-extras = ["webui", "websearch", "eval", "rag", "dev"]
 
