@@ -169,6 +169,11 @@ class DocumentCrawler:
         unique_urls = {url_info["url"]: url_info for url_info in urls}
         result = list(unique_urls.values())
 
+        # Sort globally by lastmod (newest first) before applying max_pages limit
+        # This ensures we get the most recent content regardless of sitemap structure
+        # URLs without lastmod dates sort to the end
+        result.sort(key=lambda x: x.get("lastmod") or "", reverse=True)
+
         # Apply max_pages limit
         if self.max_pages and len(result) > self.max_pages:
             logger.info(f"[CRAWLER] Limiting to {self.max_pages} pages (found {len(result)})")
@@ -417,46 +422,56 @@ class DocumentCrawler:
         pbar.close()
         return urls
 
-    def fetch_page(self, url: str) -> tuple[str, str] | None:
-        """Fetch a single page and return (url, html_content).
+    def fetch_page(self, url: str) -> tuple[str, str, int] | None:
+        """Fetch a single page and return (url, html_content, status_code).
 
         Args:
             url: URL to fetch
 
         Returns:
-            Tuple of (url, html_content) or None if failed
+            Tuple of (url, html_content, status_code) or None if blocked by robots.txt
+            On HTTP errors, returns (url, "", status_code) to allow status tracking
         """
         try:
             # Check robots.txt only if it loaded successfully
             if self.robots_loaded:
                 if not self.robot_parser.can_fetch(self.user_agent, url):
                     logger.warning(f"[CRAWLER] robots.txt disallows: {url}")
-                    return None
+                    return None  # No status code - blocked before request
             else:
                 logger.debug(f"[CRAWLER] Skipping robots.txt check (not loaded) for: {url}")
 
             logger.debug(f"[CRAWLER] Fetching: {url}")
             response = requests.get(url, headers={"User-Agent": self.user_agent}, timeout=self.request_timeout)
+            status_code = response.status_code
 
             # Verify final URL is still within base domain (blocks redirects to external sites)
             final_url = response.url
             if not final_url.startswith(self.base_url):
                 logger.warning(f"[CRAWLER] Redirect to external domain blocked: {url} -> {final_url}")
-                return None
+                return (url, "", status_code)  # Return status but no content
 
-            response.raise_for_status()
+            # Check for HTTP errors
+            if not response.ok:
+                logger.warning(f"[CRAWLER] HTTP {status_code} for {url}")
+                return (url, "", status_code)
 
             # Only process HTML content
             content_type = response.headers.get("content-type", "")
             if "text/html" not in content_type:
                 logger.warning(f"[CRAWLER] Skipping non-HTML content: {url} ({content_type})")
-                return None
+                return (url, "", status_code)
 
-            return (url, response.text)
+            return (url, response.text, status_code)
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            logger.error(f"[CRAWLER] HTTP {status_code} for {url}: {e}")
+            return (url, "", status_code)
 
         except Exception as e:
             logger.error(f"[CRAWLER] Failed to fetch {url}: {e}")
-            return None
+            return (url, "", 0)  # 0 indicates network/connection error
 
     def _normalize_url(self, url: str) -> str:
         """Normalize URL by removing query params, anchors, trailing slashes.

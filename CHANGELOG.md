@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2025-12-03
+
+### Fixed
+- **RAG Sitemap URL Ordering** - Global sort by `lastmod` before applying `max_pages` limit
+  - Previously, URLs were sorted within each sub-sitemap but not globally
+  - When `max_pages` limit was applied, older content could be included instead of newest
+  - Now all URLs are sorted by `lastmod` (newest first) before limiting
+  - Ensures `max_pages` always returns the most recently modified content
+
+### Added
+- **HTTP Response Status Summary** - New table showing crawl response distribution
+  - Displays status code, description, count, and percentage for each response type
+  - Tracks robots.txt blocks, network errors, and all HTTP status codes
+  - Printed to stderr after fetch phase completes
+  - Helps diagnose crawl issues (404s, rate limiting, etc.)
+
+### Changed
+- **Crawler `fetch_page()` Return Type** - Now returns `(url, html, status_code)` tuple
+  - Previously returned `(url, html)` or `None`
+  - Now returns status code even on HTTP errors for tracking
+  - Returns `None` only when blocked by robots.txt (no request made)
+  - Network errors use status code `0`
+
 ## [0.9.2] - 2025-11-30
 
 ### Fixed

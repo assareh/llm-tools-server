@@ -882,6 +882,9 @@ class DocSearchIndex:
         cache_hits = 0
         failed_count = 0
 
+        # Track HTTP response status codes for summary
+        status_counts: dict[int, int] = {}
+
         with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
             # Submit all fetch tasks (with cache check)
             future_to_url = {
@@ -905,20 +908,33 @@ class DocSearchIndex:
                 try:
                     result = future.result()
                     if result:
-                        pages.append(result)
-                        if result.get("from_cache"):
-                            cache_hits += 1
+                        # Track status code
+                        status_code = result.get("status_code", 200)
+                        status_counts[status_code] = status_counts.get(status_code, 0) + 1
 
-                        # Success - clear any previous failures
-                        failed_urls.pop(url, None)
+                        # Check if we got actual content
+                        if result.get("html"):
+                            pages.append(result)
+                            if result.get("from_cache"):
+                                cache_hits += 1
+                            # Success - clear any previous failures
+                            failed_urls.pop(url, None)
+                        else:
+                            # Got response but no content (HTTP error, non-HTML, etc.)
+                            failed_count += 1
+                            error_msg = f"HTTP {status_code}" if status_code else "No content"
+                            logger.debug(f"[RAG] {error_msg} for {url}")
+                            self._track_url_failure(url, failed_urls, error_msg)
                     else:
-                        # Fetch returned None (failure)
+                        # Fetch returned None (blocked by robots.txt)
                         failed_count += 1
-                        logger.debug(f"[RAG] Failed to fetch page: {url}")
-                        self._track_url_failure(url, failed_urls, "Failed to fetch page")
+                        status_counts[-1] = status_counts.get(-1, 0) + 1  # -1 for robots.txt blocked
+                        logger.debug(f"[RAG] Blocked by robots.txt: {url}")
+                        self._track_url_failure(url, failed_urls, "Blocked by robots.txt")
 
                 except Exception as e:
                     failed_count += 1
+                    status_counts[0] = status_counts.get(0, 0) + 1  # 0 for network errors
                     logger.debug(f"[RAG] Failed to fetch {url}: {e}")
                     self._track_url_failure(url, failed_urls, str(e))
 
@@ -934,7 +950,80 @@ class DocSearchIndex:
         elif failed_count > 0:
             logger.info(f"[RAG] Fetch complete: {len(pages)} pages ({failed_count} failed)")
 
+        # Print HTTP response distribution summary
+        self._print_http_status_summary(status_counts, total)
+
         return pages, failed_urls
+
+    def _print_http_status_summary(self, status_counts: dict[int, int], total: int):
+        """Print a summary table of HTTP response status code distribution.
+
+        Args:
+            status_counts: Dict mapping status code to count (-1=robots.txt blocked, 0=network error)
+            total: Total number of URLs attempted
+        """
+        if not status_counts:
+            return
+
+        # Human-readable descriptions for status codes
+        status_descriptions = {
+            -1: "Blocked (robots.txt)",
+            0: "Network Error",
+            200: "OK",
+            201: "Created",
+            301: "Moved Permanently",
+            302: "Found (Redirect)",
+            304: "Not Modified",
+            400: "Bad Request",
+            401: "Unauthorized",
+            403: "Forbidden",
+            404: "Not Found",
+            408: "Request Timeout",
+            429: "Too Many Requests",
+            500: "Internal Server Error",
+            502: "Bad Gateway",
+            503: "Service Unavailable",
+            504: "Gateway Timeout",
+        }
+
+        # Build the table
+        print("\n[RAG] HTTP Response Summary:", file=sys.stderr)
+        print("┌─────────┬───────────────────────────┬───────┬─────────┐", file=sys.stderr)
+        print("│ Status  │ Description               │ Count │ Percent │", file=sys.stderr)
+        print("├─────────┼───────────────────────────┼───────┼─────────┤", file=sys.stderr)
+
+        # Sort by status code (special codes -1 and 0 at the end)
+        sorted_codes = sorted(status_counts.keys(), key=lambda x: (x <= 0, x))
+
+        for code in sorted_codes:
+            count = status_counts[code]
+            percent = (count / total * 100) if total > 0 else 0
+
+            # Get description
+            if code in status_descriptions:
+                desc = status_descriptions[code]
+            elif 200 <= code < 300:
+                desc = "Success"
+            elif 300 <= code < 400:
+                desc = "Redirect"
+            elif 400 <= code < 500:
+                desc = "Client Error"
+            elif 500 <= code < 600:
+                desc = "Server Error"
+            else:
+                desc = "Unknown"
+
+            # Format status code display
+            if code == -1:
+                code_str = "N/A"
+            elif code == 0:
+                code_str = "ERR"
+            else:
+                code_str = str(code)
+
+            print(f"│ {code_str:^7} │ {desc:<25} │ {count:>5} │ {percent:>6.1f}% │", file=sys.stderr)
+
+        print("└─────────┴───────────────────────────┴───────┴─────────┘", file=sys.stderr)
 
     def _fetch_page_with_cache(self, url_info: dict[str, Any], force_refresh: bool = False) -> dict[str, Any] | None:
         """Fetch a page with caching support.
@@ -944,7 +1033,7 @@ class DocSearchIndex:
             force_refresh: If True, skip cache and refetch page
 
         Returns:
-            Page data dict or None if failed
+            Page data dict with url, html, status_code, etc. or None if blocked by robots.txt
         """
         url = url_info["url"]
         lastmod = url_info.get("lastmod")
@@ -957,19 +1046,28 @@ class DocSearchIndex:
         # Fetch fresh content
         result = self.crawler.fetch_page(url)
         if result:
-            url, html = result
+            url, html, status_code = result
 
-            # Extract main content using readability
-            clean_html = self._extract_main_content(html, url)
+            # If we got content, extract main content using readability
+            clean_html = ""
+            if html:
+                clean_html = self._extract_main_content(html, url)
 
-            page_data = {"url": url, "html": clean_html, "lastmod": lastmod, "from_cache": False}
+            page_data = {
+                "url": url,
+                "html": clean_html,
+                "lastmod": lastmod,
+                "from_cache": False,
+                "status_code": status_code,
+            }
 
-            # Save to cache
-            self._save_cached_page(page_data)
+            # Only save to cache if we got content
+            if clean_html:
+                self._save_cached_page(page_data)
 
             return page_data
 
-        return None
+        return None  # Blocked by robots.txt
 
     def _extract_main_content(self, html: str, url: str) -> str:
         """Extract main content from HTML using readability.
