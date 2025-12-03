@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2025-12-03
+
+### Added
+- **Sitemap Caching** - Cache sub-sitemap URLs with lastmod-based invalidation
+  - Sub-sitemaps are cached in `sitemap_cache.json` with their lastmod dates and URLs
+  - On subsequent crawls, only sub-sitemaps with changed lastmod are refetched
+  - Significantly speeds up crawling sites with many sub-sitemaps (e.g., 17 sitemaps → only changed ones fetched)
+  - Progress bar shows "(cached)" or "(fetching)" status for each sub-sitemap
+  - Cache is automatically updated when sub-sitemaps change
+
 ## [0.9.3] - 2025-12-03
 
 ### Fixed

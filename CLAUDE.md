@@ -453,4 +453,4 @@ When making changes, test in both projects.
 ---
 
 *Last updated: 2025-12-03*
-*Version: 0.9.3*
+*Version: 0.9.4*

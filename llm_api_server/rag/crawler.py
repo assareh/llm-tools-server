@@ -6,6 +6,7 @@ Supports three crawling modes:
 3. Manual URL list (explicit list of URLs to index)
 """
 
+import json
 import logging
 import re
 import sys
@@ -64,6 +65,7 @@ class DocumentCrawler:
         """
         self.base_url = base_url.rstrip("/")
         self.cache_dir = cache_dir
+        self.sitemap_cache_file = cache_dir / "sitemap_cache.json"
         self.manual_urls = manual_urls or []
         self.manual_urls_only = manual_urls_only
         self.max_crawl_depth = max_crawl_depth
@@ -252,6 +254,10 @@ class DocumentCrawler:
             if sitemap_elements:
                 logger.info(f"[CRAWLER] Found sitemap index with {len(sitemap_elements)} sub-sitemaps")
 
+                # Load sitemap cache for lastmod-based invalidation
+                sitemap_cache = self._load_sitemap_cache()
+                cached_sitemaps = sitemap_cache.get("sub_sitemaps", {})
+
                 # Collect sub-sitemaps with their lastmod dates
                 sub_sitemaps = []
                 for sitemap_elem in sitemap_elements:
@@ -266,7 +272,21 @@ class DocumentCrawler:
 
                 # Sort sub-sitemaps by lastmod (newest first) to prioritize recent content
                 sub_sitemaps.sort(key=lambda x: x.get("lastmod") or "", reverse=True)
-                logger.info("[CRAWLER] Processing sub-sitemaps (newest first)...")
+
+                # Check cache hits vs misses
+                cache_hits = 0
+                cache_misses = 0
+                for sm in sub_sitemaps:
+                    cached = cached_sitemaps.get(sm["url"])
+                    if cached and cached.get("lastmod") == sm.get("lastmod") and sm.get("lastmod"):
+                        cache_hits += 1
+                    else:
+                        cache_misses += 1
+
+                logger.info(f"[CRAWLER] Processing sub-sitemaps: {cache_hits} cached, {cache_misses} to fetch...")
+
+                # Track updates for saving cache
+                updated_cache = {"sub_sitemaps": {}}
 
                 # Parse each sub-sitemap in order with progress bar
                 pbar = tqdm(
@@ -277,23 +297,47 @@ class DocumentCrawler:
                     file=sys.stderr,
                 )
                 for sitemap_info in pbar:
-                    try:
-                        # Update progress bar description with current sitemap
-                        sitemap_name = sitemap_info["url"].split("/")[-1]
-                        pbar.set_postfix_str(f"{sitemap_name[:30]}", refresh=True)
+                    sitemap_url = sitemap_info["url"]
+                    sitemap_lastmod = sitemap_info.get("lastmod")
+                    sitemap_name = sitemap_url.split("/")[-1]
 
-                        response = requests.get(
-                            sitemap_info["url"], headers={"User-Agent": self.user_agent}, timeout=self.request_timeout
-                        )
-                        response.raise_for_status()
-                        sub_urls = self._parse_sitemap_xml(response.content)
-                        urls.extend(sub_urls)
+                    try:
+                        # Check if we have a valid cache hit
+                        cached = cached_sitemaps.get(sitemap_url)
+                        if cached and cached.get("lastmod") == sitemap_lastmod and sitemap_lastmod:
+                            # Cache hit - use cached URLs
+                            pbar.set_postfix_str(f"{sitemap_name[:20]} (cached)", refresh=True)
+                            sub_urls = cached.get("urls", [])
+                            urls.extend(sub_urls)
+                            # Preserve in updated cache
+                            updated_cache["sub_sitemaps"][sitemap_url] = cached
+                        else:
+                            # Cache miss - fetch fresh
+                            pbar.set_postfix_str(f"{sitemap_name[:20]} (fetching)", refresh=True)
+
+                            response = requests.get(
+                                sitemap_url, headers={"User-Agent": self.user_agent}, timeout=self.request_timeout
+                            )
+                            response.raise_for_status()
+                            sub_urls = self._parse_sitemap_xml(response.content)
+                            urls.extend(sub_urls)
+
+                            # Update cache with new data
+                            updated_cache["sub_sitemaps"][sitemap_url] = {
+                                "lastmod": sitemap_lastmod,
+                                "urls": sub_urls,
+                            }
+
+                            time.sleep(self.rate_limit_delay)
 
                         # Update progress bar with URL count
                         pbar.set_postfix_str(f"{len(urls)} URLs found", refresh=True)
-                        time.sleep(self.rate_limit_delay)
+
                     except Exception as e:
-                        logger.warning(f"[CRAWLER] Failed to parse sub-sitemap {sitemap_info['url']}: {e}")
+                        logger.warning(f"[CRAWLER] Failed to parse sub-sitemap {sitemap_url}: {e}")
+
+                # Save updated cache
+                self._save_sitemap_cache(updated_cache)
 
                 logger.info(f"[CRAWLER] Finished parsing {len(sub_sitemaps)} sub-sitemaps, total URLs: {len(urls)}")
                 return urls
@@ -512,3 +556,32 @@ class DocumentCrawler:
             return False
 
         return True
+
+    def _load_sitemap_cache(self) -> dict[str, Any]:
+        """Load sitemap cache from disk.
+
+        Returns:
+            Dict with 'sub_sitemaps' mapping sitemap URL -> {lastmod, urls}
+        """
+        if not self.sitemap_cache_file.exists():
+            return {"sub_sitemaps": {}}
+
+        try:
+            with open(self.sitemap_cache_file) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"[CRAWLER] Failed to load sitemap cache: {e}")
+            return {"sub_sitemaps": {}}
+
+    def _save_sitemap_cache(self, cache: dict[str, Any]):
+        """Save sitemap cache to disk.
+
+        Args:
+            cache: Cache dict with sub_sitemaps mapping
+        """
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            with open(self.sitemap_cache_file, "w") as f:
+                json.dump(cache, f, indent=2)
+        except Exception as e:
+            logger.warning(f"[CRAWLER] Failed to save sitemap cache: {e}")
