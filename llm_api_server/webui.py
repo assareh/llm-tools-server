@@ -42,14 +42,18 @@ def start_webui(
     """
     try:
         # Find open-webui executable (prefer venv, fallback to system)
-        # Look in the project directory's venv
-        venv_openwebui = Path.cwd() / "venv" / "bin" / "open-webui"
-        if venv_openwebui.exists():
-            openwebui_cmd = str(venv_openwebui)
-        else:
+        # Look in the project directory's venv (.venv for uv, venv for pip)
+        openwebui_cmd = None
+        for venv_dir in [".venv", "venv"]:
+            venv_openwebui = Path.cwd() / venv_dir / "bin" / "open-webui"
+            if venv_openwebui.exists():
+                openwebui_cmd = str(venv_openwebui)
+                break
+
+        if not openwebui_cmd:
             result = subprocess.run(["which", "open-webui"], capture_output=True, text=True)
             if result.returncode != 0:
-                print("Warning: open-webui not found. Install with: pip install open-webui")
+                print("Warning: open-webui not found. Install with: uv sync --extra webui")
                 return None
             openwebui_cmd = "open-webui"
 
