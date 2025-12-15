@@ -49,8 +49,8 @@ This project follows [Semantic Versioning](https://semver.org/). Starting with v
 
 ```bash
 # Clone and install
-git clone https://github.com/assareh/llm-api-server.git
-cd llm-api-server
+git clone https://github.com/assareh/llm-tools-server.git
+cd llm-tools-server
 uv sync
 
 # With optional dependencies
@@ -65,14 +65,14 @@ uv sync --all-extras       # Install everything
 ### Using pip
 
 ```bash
-pip install llm-api-server
+pip install llm-tools-server
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/assareh/llm-api-server.git
-cd llm-api-server
+git clone https://github.com/assareh/llm-tools-server.git
+cd llm-tools-server
 pip install -e .
 ```
 
@@ -80,19 +80,19 @@ pip install -e .
 
 ```bash
 # For Open Web UI support
-pip install llm-api-server[webui]
+pip install llm-tools-server[webui]
 
 # For web search tool
-pip install llm-api-server[websearch]
+pip install llm-tools-server[websearch]
 
 # For RAG document search module
-pip install llm-api-server[rag]
+pip install llm-tools-server[rag]
 
 # For HTML reports with markdown formatting
-pip install llm-api-server[eval]
+pip install llm-tools-server[eval]
 
 # For development
-pip install llm-api-server[dev]
+pip install llm-tools-server[dev]
 ```
 
 ## Quick Start
@@ -723,8 +723,8 @@ See these projects using LLM API Server:
 
 ```bash
 # Clone and install with dev dependencies
-git clone https://github.com/assareh/llm-api-server.git
-cd llm-api-server
+git clone https://github.com/assareh/llm-tools-server.git
+cd llm-tools-server
 uv sync --extra dev
 
 # Run tests
@@ -742,8 +742,8 @@ uv run ruff check --fix llm_api_server/
 
 ```bash
 # Clone the repository
-git clone https://github.com/assareh/llm-api-server.git
-cd llm-api-server
+git clone https://github.com/assareh/llm-tools-server.git
+cd llm-tools-server
 
 # Install in development mode
 pip install -e ".[dev]"

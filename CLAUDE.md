@@ -60,7 +60,7 @@ All linting settings in `pyproject.toml`:
 ### Package Structure
 
 ```
-llm-api-server/
+llm-tools-server/
 ├── llm_api_server/
 │   ├── __init__.py         # Package exports
 │   ├── server.py           # Core LLMServer class
@@ -108,7 +108,7 @@ Since this is a framework library:
 1. **Local testing**: Install in consuming project
    ```bash
    cd ../milesoss  # or ../Ivan
-   uv sync  # Will pull llm-api-server from GitHub
+   uv sync  # Will pull llm-tools-server from GitHub
    uv run python milesoss.py --no-webui
    ```
 
@@ -160,7 +160,7 @@ git push
 
 Changes are now distributed via GitHub. Consuming projects install with:
 ```
-llm-api-server @ git+https://github.com/assareh/llm-api-server.git
+llm-tools-server @ git+https://github.com/assareh/llm-tools-server.git
 ```
 
 ## Key Components

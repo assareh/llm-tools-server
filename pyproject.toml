@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llm-api-server"
+name = "llm-tools-server"
 version = "0.11.1"
 description = "Reusable Flask server for LLM backends (Ollama, LM Studio) with tool calling"
 readme = "README.md"
@@ -50,9 +50,9 @@ rag = [
 dev = ["pytest", "pytest-mock", "black", "ruff", "mypy"]
 
 [project.urls]
-Homepage = "https://github.com/assareh/llm-api-server"
-Repository = "https://github.com/assareh/llm-api-server"
-Issues = "https://github.com/assareh/llm-api-server/issues"
+Homepage = "https://github.com/assareh/llm-tools-server"
+Repository = "https://github.com/assareh/llm-tools-server"
+Issues = "https://github.com/assareh/llm-tools-server/issues"
 
 [tool.setuptools]
 license-files = []
