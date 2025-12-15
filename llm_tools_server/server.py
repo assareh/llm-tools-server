@@ -38,8 +38,8 @@ class LLMServer:
         """Initialize LLM API Server.
 
         Args:
-            name: Display name for the server (e.g., "Ivan", "Miles")
-            model_name: Model identifier to advertise (e.g., "wwtfo/ivan")
+            name: Display name for the server (e.g., "MyApp", "DocBot")
+            model_name: Model identifier to advertise (e.g., "myapp/assistant")
             tools: List of LangChain tools
             config: ServerConfig instance
             default_system_prompt: Default system prompt if file doesn't exist
@@ -68,7 +68,7 @@ class LLMServer:
 
         # Create Flask app with unique name to avoid conflicts
         # Use full name with prefix to ensure uniqueness across projects
-        flask_app_name = f"llm_api_server_{name.lower().replace(' ', '_')}"
+        flask_app_name = f"llm_tools_server_{name.lower().replace(' ', '_')}"
         self.app = Flask(flask_app_name)
         CORS(self.app)
 

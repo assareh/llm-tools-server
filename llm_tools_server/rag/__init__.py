@@ -10,7 +10,7 @@ This module provides local RAG capabilities with:
 - FAISS vector storage (CPU-optimized, local)
 
 Example usage:
-    from llm_api_server.rag import DocSearchIndex, RAGConfig
+    from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
     # Configure RAG with contextual retrieval
     config = RAGConfig(

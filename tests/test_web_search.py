@@ -13,7 +13,7 @@ def test_web_search_requires_api_key():
     config = ServerConfig()
     config.OLLAMA_API_KEY = ""
 
-    with patch("llm_api_server.web_search_tool.ollama_web_search") as mock_search:
+    with patch("llm_tools_server.web_search_tool.ollama_web_search") as mock_search:
         tool = create_web_search_tool(config)
         result = tool.func(query="Python programming language", max_results=3)
 
@@ -32,7 +32,7 @@ def test_web_search_calls_ollama_and_formats_results():
         {"title": "Result Two", "url": "https://example.com/2", "description": "Second result"},
     ]
 
-    with patch("llm_api_server.web_search_tool.ollama_web_search", return_value=fake_results) as mock_search:
+    with patch("llm_tools_server.web_search_tool.ollama_web_search", return_value=fake_results) as mock_search:
         tool = create_web_search_tool(config)
         output = tool.func(query="vault", max_results=1, site="hashicorp.com")
 
@@ -50,7 +50,7 @@ def test_web_search_handles_errors_gracefully():
     config.OLLAMA_API_KEY = "test-key"
 
     with patch(
-        "llm_api_server.web_search_tool.ollama_web_search",
+        "llm_tools_server.web_search_tool.ollama_web_search",
         side_effect=RuntimeError("boom"),
     ):
         tool = create_web_search_tool(config)

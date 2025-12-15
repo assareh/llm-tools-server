@@ -29,7 +29,7 @@ from tqdm import tqdm
 from .config import RAGConfig
 
 if TYPE_CHECKING:
-    from llm_api_server.config import ServerConfig
+    from llm_tools_server.config import ServerConfig
 
 logger = logging.getLogger(__name__)
 

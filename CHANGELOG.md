@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Thread-safe with proper locking and graceful shutdown
   - Status API via `get_updater_status()` and `force_update_check()`
   - Console output with `[UPDATER]` prefix for visibility in daemon threads
-  - Implementation: `llm_api_server/rag/updater.py`
+  - Implementation: `llm_tools_server/rag/updater.py`
 
 - **Sitemap Change Detection** - Efficient change detection for incremental updates
   - New `get_sitemap_changes()` method compares current sitemap with indexed URLs
@@ -277,7 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Normalized Discounted Cumulative Gain (NDCG) for graded relevance
   - Context relevance scoring for RAG pipelines
   - Answer faithfulness and groundedness metrics
-  - Implementation: `llm_api_server/eval/rag_evaluator.py`
+  - Implementation: `llm_tools_server/eval/rag_evaluator.py`
 
 ## [0.6.4] - 2025-11-27
 
@@ -414,7 +414,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Robots.txt support with sitemap discovery
   - HTML page caching for faster index rebuilds
   - Requires optional `rag` extra: `uv sync --extra rag`
-  - Implementation: `llm_api_server/rag/`
+  - Implementation: `llm_tools_server/rag/`
 
 - **RAG Features**
   - Stateful crawling with resume capability and incremental indexing
@@ -447,7 +447,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Uses `OLLAMA_API_KEY` from config if available
   - Graceful fallback to DuckDuckGo when API unavailable or rate-limited
   - Site filtering support (e.g., `site:hashicorp.com query`)
-  - Implementation: `llm_api_server/web_search_tool.py`
+  - Implementation: `llm_tools_server/web_search_tool.py`
 
 - **Enhanced HTML Reports** - Beautiful markdown-formatted evaluation reports
   - Full responses with no truncation (removed 500-character limit)
@@ -457,7 +457,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Professional formatting for tables, lists, and blockquotes
   - Smooth CSS transitions and modern styling
   - Requires optional `eval` extra: `uv sync --extra eval`
-  - Implementation: `llm_api_server/eval/reporters.py:84-460`
+  - Implementation: `llm_tools_server/eval/reporters.py:84-460`
 
 - **Configuration**
   - Added `OLLAMA_API_KEY` to `ServerConfig` for web search authentication
@@ -485,7 +485,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Custom validator support for domain-specific validation
   - Performance metrics (response time, success rate)
   - Example evaluation script (`example_evaluation.py`)
-  - Complete documentation in `llm_api_server/eval/README.md`
+  - Complete documentation in `llm_tools_server/eval/README.md`
 
 - **Backend Configuration** (from roadmap Tier 1 & 2)
   - Backend request timeouts (`BACKEND_CONNECT_TIMEOUT`, `BACKEND_READ_TIMEOUT`)
@@ -517,7 +517,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Initial Release
 
-Core LLM API Server package extracted from Ivan project.
+Core LLM Tools Server package - reusable framework for LLM backends.
 
 **Features:**
 - OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`, `/health`)

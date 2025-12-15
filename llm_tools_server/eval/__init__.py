@@ -7,7 +7,7 @@ and RAG retrieval systems.
 
 Test LLM API endpoints with validation criteria and generate HTML/JSON reports:
 
-    from llm_api_server.eval import Evaluator, TestCase, HTMLReporter
+    from llm_tools_server.eval import Evaluator, TestCase, HTMLReporter
 
     tests = [
         TestCase(
@@ -27,8 +27,8 @@ Test LLM API endpoints with validation criteria and generate HTML/JSON reports:
 
 Test RAG retrieval quality with metrics like Recall@k, MRR, and nDCG:
 
-    from llm_api_server.eval import RAGEvaluator, RAGTestCase
-    from llm_api_server.rag import DocSearchIndex, RAGConfig
+    from llm_tools_server.eval import RAGEvaluator, RAGTestCase
+    from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
     # Load index
     config = RAGConfig(base_url="https://docs.example.com", cache_dir="./cache")

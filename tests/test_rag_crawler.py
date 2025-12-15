@@ -31,7 +31,7 @@ def test_fetch_page_blocks_redirects_to_external_domains(tmp_path, monkeypatch):
         resp.raise_for_status = Mock()
         return resp
 
-    monkeypatch.setattr("llm_api_server.rag.crawler.requests.get", fake_get)
+    monkeypatch.setattr("llm_tools_server.rag.crawler.requests.get", fake_get)
 
     crawler = DocumentCrawler(base_url="https://docs.example.com", cache_dir=tmp_path)
     result = crawler.fetch_page("https://docs.example.com/start")
@@ -64,7 +64,7 @@ def test_fetch_page_skips_non_html_content(tmp_path, monkeypatch):
         resp.raise_for_status = Mock()
         return resp
 
-    monkeypatch.setattr("llm_api_server.rag.crawler.requests.get", fake_get)
+    monkeypatch.setattr("llm_tools_server.rag.crawler.requests.get", fake_get)
 
     crawler = DocumentCrawler(base_url="https://docs.example.com", cache_dir=tmp_path)
     result = crawler.fetch_page("https://docs.example.com/guide.pdf")

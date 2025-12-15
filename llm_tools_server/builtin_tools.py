@@ -146,7 +146,7 @@ def create_web_search_tool(config: "ServerConfig") -> Tool:
         LangChain Tool for web search
 
     Example:
-        >>> from llm_api_server import ServerConfig, create_web_search_tool
+        >>> from llm_tools_server import ServerConfig, create_web_search_tool
         >>> config = ServerConfig.from_env()
         >>> web_search = create_web_search_tool(config)
         >>> tools = [get_current_datetime, calculate, web_search]
@@ -187,8 +187,8 @@ def create_doc_search_tool(
         LangChain Tool for document search
 
     Example:
-        >>> from llm_api_server.rag import DocSearchIndex, RAGConfig
-        >>> from llm_api_server import create_doc_search_tool
+        >>> from llm_tools_server.rag import DocSearchIndex, RAGConfig
+        >>> from llm_tools_server import create_doc_search_tool
         >>>
         >>> # Set up RAG index
         >>> config = RAGConfig(base_url="https://docs.example.com", cache_dir="./doc_index")

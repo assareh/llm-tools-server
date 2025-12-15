@@ -151,7 +151,7 @@ EXAMPLE_TEST_CASES = """
 Here's how to create test cases for your RAG system:
 
 ```python
-from llm_api_server.eval import RAGTestCase, RAGEvaluator, load_test_cases
+from llm_tools_server.eval import RAGTestCase, RAGEvaluator, load_test_cases
 
 # Option 1: Define test cases in code
 tests = [
@@ -185,7 +185,7 @@ tests = [
 tests = load_test_cases("my_test_cases.json")
 
 # Option 3: Build interactively
-from llm_api_server.eval import create_test_case_interactive
+from llm_tools_server.eval import create_test_case_interactive
 test = create_test_case_interactive(index, "my query", "Test description")
 ```
 
@@ -209,8 +209,8 @@ test = create_test_case_interactive(index, "my query", "Test description")
 ## Running Evaluations
 
 ```python
-from llm_api_server.rag import DocSearchIndex, RAGConfig
-from llm_api_server.eval import RAGEvaluator
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.eval import RAGEvaluator
 
 # Load your index
 config = RAGConfig(base_url="https://docs.example.com", cache_dir="./cache")

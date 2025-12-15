@@ -8,7 +8,7 @@ This script shows how to:
 
 Usage:
     # Start your LLM API server first
-    python milesoss.py  # or any server using llm-api-server
+    python myapp.py  # or any server using llm-tools-server
 
     # Then run this evaluation
     python example_evaluation.py
@@ -125,7 +125,7 @@ def main():
     if not evaluator.check_health():
         print("❌ ERROR: LLM API is not running or not healthy")
         print(f"\nPlease start your LLM API server at {API_URL}")
-        print("Example: python milesoss.py")
+        print("Example: python myapp.py")
         return 1
 
     print("✅ API is healthy\n")

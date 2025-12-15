@@ -13,7 +13,7 @@ A comprehensive evaluation framework for testing LLM API endpoints with flexible
 ## Quick Start
 
 ```python
-from llm_api_server.eval import Evaluator, TestCase, HTMLReporter
+from llm_tools_server.eval import Evaluator, TestCase, HTMLReporter
 
 # Define test cases
 tests = [
@@ -204,7 +204,7 @@ test = TestCase(
 ### Testing a Q&A System
 
 ```python
-from llm_api_server.eval import Evaluator, TestCase, HTMLReporter
+from llm_tools_server.eval import Evaluator, TestCase, HTMLReporter
 
 # Define domain-specific test cases
 tests = [
@@ -248,7 +248,7 @@ evaluator = Evaluator(api_url="http://localhost:8000")
 results = evaluator.run_tests(regression_tests, stop_on_failure=True)
 
 # Generate JSON for CI integration
-from llm_api_server.eval import JSONReporter
+from llm_tools_server.eval import JSONReporter
 reporter = JSONReporter()
 reporter.generate(results, "regression_results.json")
 
@@ -262,7 +262,7 @@ sys.exit(0 if summary['failed'] == 0 else 1)
 
 ```python
 import time
-from llm_api_server.eval import Evaluator, TestCase
+from llm_tools_server.eval import Evaluator, TestCase
 
 # Create test cases with different complexities
 tests = [

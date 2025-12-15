@@ -20,8 +20,8 @@ class RAGEvaluator:
         index: A DocSearchIndex instance (must be loaded/indexed)
 
     Example:
-        from llm_api_server.rag import DocSearchIndex, RAGConfig
-        from llm_api_server.eval import RAGEvaluator, RAGTestCase
+        from llm_tools_server.rag import DocSearchIndex, RAGConfig
+        from llm_tools_server.eval import RAGEvaluator, RAGTestCase
 
         # Setup index
         config = RAGConfig(base_url="https://docs.example.com", cache_dir="./cache")

@@ -143,7 +143,7 @@ class PeriodicIndexUpdater:
     the existing pause/resume pattern to yield resources during user requests.
 
     Example usage:
-        from llm_api_server.rag import DocSearchIndex, RAGConfig
+        from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
         config = RAGConfig(
             base_url="https://docs.example.com",

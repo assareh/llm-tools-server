@@ -15,7 +15,7 @@ When enabled, the model's internal reasoning is separated from its final output,
 
 ## Proposed Changes
 
-### File: `llm_api_server/backends.py`
+### File: `llm_tools_server/backends.py`
 
 1. Add `think` parameter to `call_ollama()`:
 
@@ -55,7 +55,7 @@ def call_lmstudio(messages: list[dict], tools: list, config, temperature: float 
         payload["reasoning"] = think  # Accepts 'low', 'medium', 'high'
 ```
 
-### File: `llm_api_server/server.py`
+### File: `llm_tools_server/server.py`
 
 3. Extract `think` from request and pass through:
 
@@ -83,7 +83,7 @@ def call_backend(self, messages: list[dict], temperature: float, stream: bool = 
 
 5. Update `process_chat_completion()` and `stream_chat_response()` signatures to accept and pass `think`.
 
-### File: `llm_api_server/config.py` (Optional)
+### File: `llm_tools_server/config.py` (Optional)
 
 6. Add default configuration:
 

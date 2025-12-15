@@ -21,7 +21,7 @@ uv run pytest
 Run with coverage:
 
 ```bash
-uv run pytest --cov=llm_api_server --cov-report=html
+uv run pytest --cov=llm_tools_server --cov-report=html
 ```
 
 Run only unit tests (fast, no external dependencies):
@@ -82,7 +82,7 @@ Use `unittest.mock` or `pytest-mock` for mocking:
 from unittest.mock import patch
 
 def test_backend_call(default_config):
-    with patch("llm_api_server.backends.requests.get") as mock_get:
+    with patch("llm_tools_server.backends.requests.get") as mock_get:
         mock_get.return_value.json.return_value = {"data": []}
         # test code
 ```

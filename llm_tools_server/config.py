@@ -90,7 +90,7 @@ class ServerConfig:
         """Create config from environment variables with optional prefix.
 
         Args:
-            env_prefix: Prefix for environment variables (e.g., "IVAN_", "MILES_")
+            env_prefix: Prefix for environment variables (e.g., "MYAPP_", "BOT_")
 
         Returns:
             ServerConfig instance populated from environment

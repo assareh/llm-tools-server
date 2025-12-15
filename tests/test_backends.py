@@ -37,7 +37,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.return_value = mock_response
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_ollama_health(default_config)
 
         assert is_healthy is False  # Model not in list
@@ -57,7 +57,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.return_value = mock_response
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_ollama_health(custom_config)
 
         assert is_healthy is True
@@ -69,7 +69,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.side_effect = requests.ConnectionError("Connection refused")
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_ollama_health(default_config)
 
         assert is_healthy is False
@@ -81,7 +81,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.side_effect = requests.Timeout
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_ollama_health(default_config)
 
         assert is_healthy is False
@@ -101,7 +101,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.return_value = mock_response
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_lmstudio_health(default_config)
 
         assert is_healthy is True
@@ -116,7 +116,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.return_value = mock_response
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_lmstudio_health(default_config)
 
         assert is_healthy is False
@@ -127,7 +127,7 @@ class TestBackendHealthChecks:
         mock_session = Mock()
         mock_session.get.side_effect = requests.ConnectionError
 
-        with patch("llm_api_server.backends._get_session", return_value=mock_session):
+        with patch("llm_tools_server.backends._get_session", return_value=mock_session):
             is_healthy, message = check_lmstudio_health(default_config)
 
         assert is_healthy is False

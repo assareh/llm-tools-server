@@ -66,8 +66,8 @@ echo
 
 echo "✓ Package published to PyPI!"
 echo
-echo "View at: https://pypi.org/project/llm-api-server/$VERSION/"
+echo "View at: https://pypi.org/project/llm-tools-server/$VERSION/"
 echo
 echo "Users can now install with:"
-echo "  pip install llm-api-server"
-echo "  uv add llm-api-server"
+echo "  pip install llm-tools-server"
+echo "  uv add llm-tools-server"

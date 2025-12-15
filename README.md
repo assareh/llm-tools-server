@@ -98,7 +98,7 @@ pip install llm-tools-server[dev]
 ## Quick Start
 
 ```python
-from llm_api_server import LLMServer, ServerConfig
+from llm_tools_server import LLMServer, ServerConfig
 from langchain_core.tools import tool
 
 # Define your tools
@@ -136,8 +136,8 @@ LLM API Server includes common tools that you can use out of the box:
 ### Using Built-in Tools
 
 ```python
-from llm_api_server import LLMServer, BUILTIN_TOOLS, ServerConfig
-from llm_api_server import get_current_datetime, calculate, create_web_search_tool
+from llm_tools_server import LLMServer, BUILTIN_TOOLS, ServerConfig
+from llm_tools_server import get_current_datetime, calculate, create_web_search_tool
 from langchain_core.tools import tool
 
 config = ServerConfig.from_env("MYAPP_")
@@ -341,7 +341,7 @@ The RAG module uses a four-component architecture:
 ### Quick Start
 
 ```python
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 # Configure RAG
 config = RAGConfig(
@@ -484,8 +484,8 @@ config = RAGConfig(
 Contextual retrieval prepends LLM-generated context to each chunk before embedding, improving retrieval accuracy by ~40-50% (Anthropic's approach).
 
 ```python
-from llm_api_server import ServerConfig
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server import ServerConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 # Get server config for backend settings
 server_config = ServerConfig.from_env()
@@ -536,7 +536,7 @@ index.rebuild_embeddings()  # Uses saved chunks, skips crawling
 ### Using ServerConfig
 
 ```python
-from llm_api_server import ServerConfig
+from llm_tools_server import ServerConfig
 
 # Create from environment variables
 config = ServerConfig.from_env("MYAPP_")
@@ -616,7 +616,7 @@ LLM API Server includes a comprehensive evaluation framework for testing your LL
 ### Quick Example
 
 ```python
-from llm_api_server.eval import Evaluator, TestCase, HTMLReporter
+from llm_tools_server.eval import Evaluator, TestCase, HTMLReporter
 
 # Define test cases
 tests = [
@@ -663,7 +663,7 @@ print(f"Success Rate: {summary['success_rate']:.1f}%")
 
 ### Documentation
 
-See [`llm_api_server/eval/README.md`](llm_api_server/eval/README.md) for complete documentation and examples.
+See [`llm_tools_server/eval/README.md`](llm_tools_server/eval/README.md) for complete documentation and examples.
 
 Run the example script:
 ```bash
@@ -710,13 +710,6 @@ You are MyApp, an AI assistant specialized in...
 
 The server automatically reloads this file when it changes (based on modification time).
 
-## Example Projects
-
-See these projects using LLM API Server:
-
-- **[Ivan](https://github.com/assareh/ivan)** - HashiCorp documentation expert
-- **[milesoss](https://github.com/assareh/milesoss)** - Credit card rewards optimizer
-
 ## Development
 
 ### Using uv (recommended)
@@ -734,8 +727,8 @@ uv run pytest
 ./lint.sh
 
 # Or manually
-uv run black llm_api_server/
-uv run ruff check --fix llm_api_server/
+uv run black llm_tools_server/
+uv run ruff check --fix llm_tools_server/
 ```
 
 ### Using pip
@@ -752,20 +745,15 @@ pip install -e ".[dev]"
 pytest
 
 # Format code
-black llm_api_server/
+black llm_tools_server/
 
 # Lint
-ruff check --fix llm_api_server/
+ruff check --fix llm_tools_server/
 ```
 
 ## License
 
 MIT License - see LICENSE file for details.
-
-## Projects Using LLM API Server
-
-- **[Ivan](https://github.com/assareh/ivan)** - AI assistant for HashiCorp solutions engineers
-- **[Miles OSS](https://github.com/assareh/milesoss)** - Credit card rewards optimization assistant
 
 ## Acknowledgments
 

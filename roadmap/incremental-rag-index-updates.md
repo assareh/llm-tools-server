@@ -6,7 +6,7 @@ Add support for incremental index updates in the RAG module by tracking ETags an
 
 ## Background
 
-The current RAG implementation (`llm_api_server/rag/`) uses an all-or-nothing approach to index freshness:
+The current RAG implementation (`llm_tools_server/rag/`) uses an all-or-nothing approach to index freshness:
 
 1. `DocSearchIndex` checks if the index is older than `index_ttl_hours` (default: 24 hours)
 2. If stale, it **re-crawls and re-indexes everything**
@@ -21,7 +21,7 @@ For large documentation sites with thousands of pages, this is inefficient becau
 
 ### 1. Page Metadata Tracking
 
-**File: `llm_api_server/rag/crawler.py`**
+**File: `llm_tools_server/rag/crawler.py`**
 
 Track HTTP response headers for each crawled URL:
 
@@ -52,7 +52,7 @@ Store metadata in a JSON file alongside the index:
 
 ### 2. Conditional HTTP Requests
 
-**File: `llm_api_server/rag/crawler.py`**
+**File: `llm_tools_server/rag/crawler.py`**
 
 Add conditional request support to `DocumentCrawler`:
 
@@ -82,7 +82,7 @@ def fetch_page(self, url: str, metadata: dict | None = None) -> CrawledPage | No
 
 ### 3. Incremental Index Updates
 
-**File: `llm_api_server/rag/indexer.py`**
+**File: `llm_tools_server/rag/indexer.py`**
 
 Add methods for partial index updates:
 
@@ -141,7 +141,7 @@ Recommended: **Option A** for simplicity, with configurable rebuild threshold.
 
 ### 5. Configuration
 
-**File: `llm_api_server/rag/config.py`**
+**File: `llm_tools_server/rag/config.py`**
 
 ```python
 @dataclass
@@ -157,7 +157,7 @@ class RAGConfig:
 ## Usage After Implementation
 
 ```python
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 config = RAGConfig(
     base_url="https://docs.example.com",

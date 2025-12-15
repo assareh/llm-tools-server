@@ -29,7 +29,7 @@ echo
 echo "✓ Package published to Test PyPI!"
 echo
 echo "To test the installation, run:"
-echo "  pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llm-api-server"
+echo "  pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llm-tools-server"
 echo
 echo "Or with uv:"
-echo "  uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llm-api-server"
+echo "  uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ llm-tools-server"
