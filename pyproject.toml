@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,6 @@ version = "0.11.1"
 description = "Reusable Flask server for LLM backends (Ollama, LM Studio) with tool calling"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
 authors = [
     {name = "LLM API Server Contributors"}
 ]
@@ -16,6 +15,7 @@ keywords = ["llm", "openai", "api", "flask", "ollama", "lmstudio", "tools"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -54,15 +54,15 @@ Homepage = "https://github.com/assareh/llm-api-server"
 Repository = "https://github.com/assareh/llm-api-server"
 Issues = "https://github.com/assareh/llm-api-server/issues"
 
+[tool.setuptools]
+license-files = []
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["llm_api_server*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.md"]
-
-# Use strict editable mode to avoid copying files during development
-[tool.setuptools.cmdclass]
 
 [tool.black]
 line-length = 120
