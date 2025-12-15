@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-from llm_api_server.rag.crawler import DocumentCrawler
+from llm_tools_server.rag.crawler import DocumentCrawler
 
 
 @pytest.mark.unit

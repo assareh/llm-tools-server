@@ -2,7 +2,7 @@
 
 import pytest
 
-from llm_api_server.config import ServerConfig
+from llm_tools_server.config import ServerConfig
 
 
 @pytest.fixture

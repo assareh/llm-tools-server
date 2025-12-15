@@ -2,7 +2,7 @@
 
 import pytest
 
-from llm_api_server.builtin_tools import calculate
+from llm_tools_server.builtin_tools import calculate
 
 
 @pytest.mark.unit

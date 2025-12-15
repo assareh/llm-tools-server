@@ -5,13 +5,13 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from llm_api_server.backends import check_lmstudio_health, check_ollama_health
+from llm_tools_server.backends import check_lmstudio_health, check_ollama_health
 
 
 @pytest.fixture(autouse=True)
 def reset_backend_session():
     """Reset the module-level session between tests to ensure mocking works."""
-    import llm_api_server.backends as backends_module
+    import llm_tools_server.backends as backends_module
 
     original_session = backends_module._session
     backends_module._session = None
@@ -140,7 +140,7 @@ class TestRetryLogic:
 
     def test_retry_on_connection_error(self, default_config):
         """Test that connection errors trigger retries."""
-        from llm_api_server.backends import _retry_on_connection_error
+        from llm_tools_server.backends import _retry_on_connection_error
 
         mock_func = Mock(
             side_effect=[requests.ConnectionError("Failed"), requests.ConnectionError("Failed"), "Success"]
@@ -154,7 +154,7 @@ class TestRetryLogic:
 
     def test_no_retry_on_http_error(self, default_config):
         """Test that HTTP errors don't trigger retries."""
-        from llm_api_server.backends import _retry_on_connection_error
+        from llm_tools_server.backends import _retry_on_connection_error
 
         http_error = requests.HTTPError("404 Not Found")
         mock_func = Mock(side_effect=http_error)
@@ -167,7 +167,7 @@ class TestRetryLogic:
 
     def test_no_retry_on_timeout(self, default_config):
         """Test that timeouts don't trigger retries."""
-        from llm_api_server.backends import _retry_on_connection_error
+        from llm_tools_server.backends import _retry_on_connection_error
 
         timeout_error = requests.Timeout("Request timed out")
         mock_func = Mock(side_effect=timeout_error)
@@ -180,7 +180,7 @@ class TestRetryLogic:
 
     def test_max_retries_exhausted(self, default_config):
         """Test behavior when max retries are exhausted."""
-        from llm_api_server.backends import _retry_on_connection_error
+        from llm_tools_server.backends import _retry_on_connection_error
 
         mock_func = Mock(side_effect=requests.ConnectionError("Always fails"))
 

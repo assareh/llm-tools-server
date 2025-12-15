@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from llm_api_server import ServerConfig, create_web_search_tool
+from llm_tools_server import ServerConfig, create_web_search_tool
 
 
 @pytest.mark.unit

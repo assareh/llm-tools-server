@@ -59,7 +59,7 @@ license-files = []
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["llm_api_server*"]
+include = ["llm_tools_server*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.md"]
@@ -131,7 +131,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 # Configure import sorting
-known-first-party = ["llm_api_server"]
+known-first-party = ["llm_tools_server"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.mypy]

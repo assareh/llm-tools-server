@@ -23,8 +23,8 @@ from pathlib import Path
 # Add parent to path if running as script
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llm_api_server.eval import RAGEvaluator, RAGTestCase, save_test_cases
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.eval import RAGEvaluator, RAGTestCase, save_test_cases
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 
 # =============================================================================

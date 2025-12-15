@@ -14,7 +14,7 @@ Usage:
     python example_evaluation.py
 """
 
-from llm_api_server.eval import ConsoleReporter, Evaluator, HTMLReporter, JSONReporter, TestCase
+from llm_tools_server.eval import ConsoleReporter, Evaluator, HTMLReporter, JSONReporter, TestCase
 
 
 def create_test_cases() -> list[TestCase]:

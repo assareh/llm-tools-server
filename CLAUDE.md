@@ -12,8 +12,8 @@ uv sync --extra dev             # Install all dependencies + dev tools
 ./lint.sh                       # Format and lint
 
 # Manual linting
-uv run black llm_api_server/    # Format code
-uv run ruff check --fix llm_api_server/  # Lint with auto-fix
+uv run black llm_tools_server/    # Format code
+uv run ruff check --fix llm_tools_server/  # Lint with auto-fix
 
 # Running commands
 uv run <command>                # Run any command in the project environment
@@ -61,7 +61,7 @@ All linting settings in `pyproject.toml`:
 
 ```
 llm-tools-server/
-├── llm_api_server/
+├── llm_tools_server/
 │   ├── __init__.py         # Package exports
 │   ├── server.py           # Core LLMServer class
 │   ├── backends.py         # Backend integrations
@@ -254,7 +254,7 @@ The framework provides reusable tools:
 - `create_web_search_tool(config)` - Web search using Ollama API:
   - Requires `OLLAMA_API_KEY` to be configured
   - Supports site filtering: `site:hashicorp.com query`
-  - Implementation: `llm_api_server/web_search_tool.py`
+  - Implementation: `llm_tools_server/web_search_tool.py`
 
 **Optional (requires `--extra rag`):**
 - `create_doc_search_tool(index, name, description)` - RAG document search tool:
@@ -263,12 +263,12 @@ The framework provides reusable tools:
   - Cross-encoder re-ranking for final result ordering
   - Returns formatted results with source URLs and parent context
   - Customizable tool name and description per use case
-  - Implementation: `llm_api_server/builtin_tools.py`
+  - Implementation: `llm_tools_server/builtin_tools.py`
 
 **Usage:**
 ```python
-from llm_api_server import BUILTIN_TOOLS, create_web_search_tool, create_doc_search_tool
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server import BUILTIN_TOOLS, create_web_search_tool, create_doc_search_tool
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 # With web search
 web_search = create_web_search_tool(config)
@@ -284,7 +284,7 @@ tools = BUILTIN_TOOLS + [web_search, doc_search]
 
 ### Evaluation Framework
 
-The framework includes a comprehensive evaluation system in `llm_api_server/eval/`:
+The framework includes a comprehensive evaluation system in `llm_tools_server/eval/`:
 
 **Components:**
 - `Evaluator` - Runs test cases against LLM API
@@ -300,7 +300,7 @@ The framework includes a comprehensive evaluation system in `llm_api_server/eval
 - **Collapsible sections** - Long responses start collapsed with expand/collapse buttons
 - **Syntax highlighting** - Code blocks, tables, lists, blockquotes
 - **Professional styling** - Dark code blocks, formatted tables, styled blockquotes
-- Implementation: `llm_api_server/eval/reporters.py:84-460`
+- Implementation: `llm_tools_server/eval/reporters.py:84-460`
 
 **Key files:**
 - `evaluator.py` - Test execution engine
@@ -308,11 +308,11 @@ The framework includes a comprehensive evaluation system in `llm_api_server/eval
 - `reporters.py` - HTML/JSON/Console report generation
 - `validators.py` - Response validation logic
 
-See `llm_api_server/eval/README.md` for complete documentation.
+See `llm_tools_server/eval/README.md` for complete documentation.
 
 ### RAG Module (Document Search)
 
-The framework includes a comprehensive RAG system in `llm_api_server/rag/`:
+The framework includes a comprehensive RAG system in `llm_tools_server/rag/`:
 
 **Components:**
 - `DocSearchIndex` - Main indexer with crawling, chunking, embedding, and search
@@ -350,7 +350,7 @@ The framework includes a comprehensive RAG system in `llm_api_server/rag/`:
 
 **Usage:**
 ```python
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 config = RAGConfig(
     base_url="https://docs.example.com",
@@ -400,8 +400,8 @@ Optional LLM-generated context for each chunk (Anthropic's approach for ~40-50% 
 Uses the same backend (LM Studio/Ollama) configured for the main server.
 
 ```python
-from llm_api_server import ServerConfig
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server import ServerConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 server_config = ServerConfig.from_env()
 rag_config = RAGConfig(

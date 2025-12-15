@@ -17,13 +17,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llm_api_server.eval import (
+from llm_tools_server.eval import (
     RAGTestCase,
     inspect_search_results,
     load_test_cases,
     save_test_cases,
 )
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 
 def interactive_session(index: DocSearchIndex, output_file: str = "test_cases.json"):

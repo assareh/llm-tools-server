@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("tiktoken")
 pytest.importorskip("bs4")
 
-from llm_api_server.rag.chunker import semantic_chunk_html
+from llm_tools_server.rag.chunker import semantic_chunk_html
 
 
 @pytest.mark.unit

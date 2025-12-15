@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from llm_api_server.server import LLMServer
+from llm_tools_server.server import LLMServer
 
 
 @pytest.mark.unit

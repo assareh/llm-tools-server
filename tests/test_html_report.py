@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_api_server.eval import HTMLReporter, TestCase, TestResult, reporters
+from llm_tools_server.eval import HTMLReporter, TestCase, TestResult, reporters
 
 
 @pytest.fixture

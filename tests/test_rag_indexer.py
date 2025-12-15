@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from langchain_core.documents import Document
 
-from llm_api_server.rag import DocSearchIndex, RAGConfig
+from llm_tools_server.rag import DocSearchIndex, RAGConfig
 
 
 @pytest.mark.unit
