@@ -6,7 +6,11 @@ A reusable Flask server providing an OpenAI-compatible API for local LLM backend
 
 ## API Stability
 
-This project follows [Semantic Versioning](https://semver.org/). Starting with version 1.0:
+This project follows [Semantic Versioning](https://semver.org/).
+
+**Current status:** Pre-1.0 development (version 0.x). The API is stable but may have occasional breaking changes as we refine the design.
+
+**From version 1.0 onwards:**
 
 - **Stable API surface:**
   - `LLMServer` class instantiation and `run()` method
