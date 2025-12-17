@@ -499,8 +499,8 @@ class DocumentCrawler:
                     elif not href.startswith("http"):
                         href = urljoin(current_url, href)
                     else:
-                        # Skip external links
-                        if not href.startswith(self.base_url):
+                        # Skip external links (use _is_same_site to handle www/non-www)
+                        if not self._is_same_site(href):
                             continue
 
                     # Normalize and add to queue (use queued set for O(1) lookup)
@@ -545,8 +545,9 @@ class DocumentCrawler:
             status_code = response.status_code
 
             # Verify final URL is still within base domain (blocks redirects to external sites)
+            # Use _is_same_site() to handle www/non-www redirects (e.g., example.com -> www.example.com)
             final_url = response.url
-            if not final_url.startswith(self.base_url):
+            if not self._is_same_site(final_url):
                 logger.warning(f"[CRAWLER] Redirect to external domain blocked: {url} -> {final_url}")
                 return (url, "", status_code)  # Return status but no content
 
@@ -586,6 +587,26 @@ class DocumentCrawler:
         # Remove trailing slash
         url = url.rstrip("/")
         return url
+
+    def _is_same_site(self, url: str) -> bool:
+        """Check if URL is on the same site as base_url (treating www. as equivalent to apex).
+
+        This handles redirects between www and non-www versions of the same domain.
+
+        Args:
+            url: URL to check
+
+        Returns:
+            True if URL is on the same site as base_url
+        """
+
+        def normalize_domain(domain: str) -> str:
+            return domain.lower().removeprefix("www.")
+
+        parsed_base = urlparse(self.base_url)
+        parsed_url = urlparse(url)
+
+        return normalize_domain(parsed_base.netloc) == normalize_domain(parsed_url.netloc)
 
     def _should_crawl_url(self, url: str) -> bool:
         """Check if URL should be crawled based on include/exclude patterns.
