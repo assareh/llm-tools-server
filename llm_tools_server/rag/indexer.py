@@ -20,13 +20,13 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import trafilatura
 from bs4 import BeautifulSoup
 from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
-from readability import Document as ReadabilityDocument
 from sentence_transformers import CrossEncoder
 from tqdm import tqdm
 
@@ -42,7 +42,8 @@ class DocSearchIndex:
     """Main document search index with crawling, chunking, embedding, and hybrid search."""
 
     # Index version for cache invalidation
-    INDEX_VERSION = "1.1.0-chunker-v2"
+    # v1.2.0: Switch from readability-lxml to trafilatura for better content extraction
+    INDEX_VERSION = "1.2.0-trafilatura"
 
     # Class-level flag to ensure global configuration is only set once
     _global_config_applied = False
@@ -58,8 +59,6 @@ class DocSearchIndex:
         self.server_config = server_config
         # Apply global configuration once per process
         if not DocSearchIndex._global_config_applied:
-            # Suppress noisy "ruthless removal did not work" messages from readability library
-            logging.getLogger("readability.readability").setLevel(logging.WARNING)
             # Disable tokenizers parallelism to prevent fork-related warnings when using WebUI
             # This is safe because we use ThreadPoolExecutor for parallel operations instead
             os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -1150,58 +1149,55 @@ class DocSearchIndex:
         return None  # Blocked by robots.txt
 
     def _extract_main_content(self, html: str, url: str) -> str:
-        """Extract main content from HTML using readability.
+        """Extract main content from HTML using trafilatura.
 
-        Uses readability to extract the main content, but falls back to the <main> tag
-        if readability removes too many code blocks (>50% loss). This protects technical
-        documentation from losing code examples while still removing boilerplate.
+        Trafilatura is designed specifically for web content extraction and handles
+        a wide variety of page layouts better than readability-lxml. It automatically
+        removes boilerplate (navigation, ads, footers) while preserving article content.
 
         Fallback strategy:
-        1. Try readability extraction
-        2. If >50% code blocks lost, try extracting <main> tag
-        3. If no <main> tag, use original HTML as last resort
+        1. Try trafilatura extraction (returns clean HTML)
+        2. If trafilatura fails/returns empty, try extracting semantic tags (<article>, <main>)
+        3. If no semantic tags, use original HTML as last resort
 
         Args:
             html: Raw HTML content
-            url: Page URL (used by readability for context)
+            url: Page URL (for logging)
 
         Returns:
             Cleaned HTML with just the main content
         """
         try:
-            # Count code blocks in original HTML
-            original_code_blocks = html.lower().count("<pre") + html.lower().count("<code")
+            # Use trafilatura to extract main content as HTML
+            # include_comments=False to skip user comments, include_tables=True for data
+            clean_html = trafilatura.extract(
+                html,
+                output_format="html",
+                include_comments=False,
+                include_tables=True,
+            )
 
-            doc = ReadabilityDocument(html, url=url)
-            clean_html = doc.summary()
+            # Check if trafilatura succeeded
+            if clean_html and len(clean_html) >= 100:
+                logger.debug(f"[RAG] Extracted {len(clean_html)} bytes from {url} using trafilatura")
+                return clean_html
 
-            # Check if readability failed (returned essentially empty content)
-            # or if code blocks were stripped (>50% loss)
-            clean_code_blocks = clean_html.lower().count("<pre") + clean_html.lower().count("<code")
-            readability_failed = len(clean_html) < 100  # Empty or near-empty output
-            code_blocks_stripped = original_code_blocks > 0 and clean_code_blocks < original_code_blocks * 0.5
+            # Trafilatura returned empty or very small content - try semantic tag fallback
+            fallback_html = self._extract_main_tag(html)
+            if fallback_html:
+                logger.debug(
+                    f"[RAG] Trafilatura returned insufficient content from {url}, "
+                    f"using semantic HTML fallback ({len(fallback_html)} bytes)"
+                )
+                return fallback_html
 
-            if readability_failed or code_blocks_stripped:
-                # Try extracting semantic HTML as fallback (cleaner than full HTML)
-                fallback_html = self._extract_main_tag(html)
-                if fallback_html:
-                    reason = "failed" if readability_failed else "stripped code blocks"
-                    logger.debug(
-                        f"[RAG] Readability {reason} from {url}, using semantic HTML fallback "
-                        f"(readability: {len(clean_html)} bytes, fallback: {len(fallback_html)} bytes)"
-                    )
-                    return fallback_html
-                else:
-                    # No semantic tags found, fall back to original HTML
-                    reason = "failed" if readability_failed else "stripped code blocks"
-                    logger.warning(
-                        f"[RAG] Readability {reason} from {url}, no semantic tags, using original HTML "
-                        f"(original: {len(html)} bytes, clean: {len(clean_html)} bytes)"
-                    )
-                    return html
+            # No semantic tags found, fall back to original HTML
+            logger.warning(
+                f"[RAG] Trafilatura failed and no semantic tags found for {url}, "
+                f"using original HTML ({len(html)} bytes)"
+            )
+            return html
 
-            logger.debug(f"[RAG] Extracted main content from {url}")
-            return clean_html
         except Exception as e:
             logger.warning(f"[RAG] Failed to extract main content from {url}: {e}, using original HTML")
             return html
